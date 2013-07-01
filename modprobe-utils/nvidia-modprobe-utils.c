@@ -115,6 +115,13 @@ int nvidia_modprobe(const int print_errors)
         return 1;
     }
 
+    /* Only attempt to load the kernel module if root. */
+
+    if (geteuid() != 0)
+    {
+        return 0;
+    }
+
     /* Attempt to read the full path to the modprobe executable from /proc. */
 
     fp = fopen(NV_PROC_MODPROBE_PATH, "r");
