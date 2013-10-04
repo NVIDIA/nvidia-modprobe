@@ -30,17 +30,44 @@
 
 #include <stdio.h>
 
-#define NV_CTL_DEVICE_NUM 255
 #define NV_MAX_CHARACTER_DEVICE_FILE_STRLEN  128
+#define NV_MODULE_INSTANCE_NONE              -1
+#define NV_MODULE_INSTANCE_ZERO              0
+#define NV_MAX_MODULE_INSTANCES              8
+#define NV_CTL_DEVICE_NUM                    255
+
+#define NV_FRONTEND_CONTROL_DEVICE_MINOR_MAX NV_CTL_DEVICE_NUM
+
 #define NV_DEVICE_FILE_PATH "/dev/nvidia%d"
 #define NV_CTRL_DEVICE_FILE_PATH "/dev/nvidiactl"
 
+#define NV_NMODULE_CTRL_DEVICE_FILE_PATH "/dev/nvidiactl%d"
+
+#define NV_FRONTEND_CONTROL_DEVICE_MINOR_MIN \
+    (NV_FRONTEND_CONTROL_DEVICE_MINOR_MAX - \
+     NV_MAX_MODULE_INSTANCES)
+
+#define NV_FRONTEND_IS_CONTROL_DEVICE(x) \
+    ((x <= NV_FRONTEND_CONTROL_DEVICE_MINOR_MAX) && \
+     (x > NV_FRONTEND_CONTROL_DEVICE_MINOR_MIN))
+
 #if defined(NV_LINUX)
 
-int nvidia_modprobe(const int print_errors);
-int nvidia_mknod(int minor);
+int nvidia_modprobe(const int print_errors, int module_instance);
+int nvidia_mknod(int minor, int module_instance);
 
 #endif /* NV_LINUX */
+
+
+/*
+ * Detect use of multiple kernel module instances. Use a single 
+ * module instance unless instance != NV_MODULE_INSTANCE_NONE
+ */
+static __inline__ int is_multi_module(int module_instance)
+{
+    return (module_instance != NV_MODULE_INSTANCE_NONE);
+}
+
 
 /*
  * Construct the device file name, based on 'minor'.  If an error
@@ -49,7 +76,8 @@ int nvidia_mknod(int minor);
 static __inline__ void assign_device_file_name
 (
     char name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN],
-    int minor
+    int minor,
+    int module_instance
 )
 {
     int ret;
@@ -59,11 +87,19 @@ static __inline__ void assign_device_file_name
         goto fail;
     }
 
-    if (minor == NV_CTL_DEVICE_NUM)
+    if (!is_multi_module(module_instance) && minor == NV_CTL_DEVICE_NUM)
     {
         ret = snprintf(name,
                        NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
                        NV_CTRL_DEVICE_FILE_PATH);
+    }
+    else if (is_multi_module(module_instance) && 
+             NV_FRONTEND_IS_CONTROL_DEVICE(minor))
+    {
+        ret = snprintf(name,
+                       NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                       NV_NMODULE_CTRL_DEVICE_FILE_PATH,
+                       module_instance);
     }
     else
     {

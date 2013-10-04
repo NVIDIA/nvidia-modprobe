@@ -49,7 +49,7 @@ extern const char *pNV_ID;
 static void print_version(void)
 {
     fmtout("");
-    fmtout(pNV_ID);
+    fmtout("%s", pNV_ID);
     fmtout("");
     fmtoutp(TAB, "Copyright (C) 2013 NVIDIA Corporation.");
     fmtout("");
@@ -70,8 +70,8 @@ static void print_summary(void)
 
 static void print_help_helper(const char *name, const char *description)
 {
-    fmtoutp(TAB, name);
-    fmtoutp(BIGTAB, description);
+    fmtoutp(TAB, "%s", name);
+    fmtoutp(BIGTAB, "%s", description);
     fmtout("");
 }
 
@@ -94,6 +94,7 @@ int main(int argc, char *argv[])
     int minors[64];
     int num_minors = 0;
     int i, ret = 1;
+    int module_instance = NV_MODULE_INSTANCE_NONE;
 
     while (1)
     {
@@ -128,6 +129,19 @@ int main(int argc, char *argv[])
                     fmterr("Too many NVIDIA character device files requested.");
                     exit(1);
                 }
+                break;            
+            case 'i':
+                if (intval < NV_MAX_MODULE_INSTANCES && 
+                    intval >= NV_MODULE_INSTANCE_ZERO)
+                {
+                    module_instance = intval;
+                }
+                else
+                {
+                    fmterr("Module instance must be in the range from "
+                           "0 to %d.\n", (NV_MAX_MODULE_INSTANCES-1));
+                    exit(1);
+                }
                 break;
             default:
                 fmterr("Invalid commandline, please run `%s --help` "
@@ -138,7 +152,7 @@ int main(int argc, char *argv[])
 
     /* Load the kernel module. */
 
-    ret = nvidia_modprobe(0);
+    ret = nvidia_modprobe(0, module_instance);
     if (!ret)
     {
         goto done;
@@ -148,7 +162,7 @@ int main(int argc, char *argv[])
 
     for (i = 0; i < num_minors; i++)
     {
-        ret = nvidia_mknod(minors[i]);
+        ret = nvidia_mknod(minors[i], module_instance);
         if (!ret)
         {
             goto done;

@@ -41,11 +41,16 @@
 
 #define NV_PROC_MODPROBE_PATH "/proc/sys/kernel/modprobe"
 #define NV_PROC_MODULES_PATH "/proc/modules"
+
+#define NV_PROC_MODPROBE_PATH_MAX        1024
+#define NV_MAX_MODULE_NAME_SIZE          16
+#define NV_MAX_PROC_REGISTRY_PATH_SIZE   NV_MAX_CHARACTER_DEVICE_FILE_STRLEN
+
 #define NV_NVIDIA_MODULE_NAME "nvidia"
-
-#define NV_PROC_MODPROBE_PATH_MAX 1024
-
 #define NV_PROC_REGISTRY_PATH "/proc/driver/nvidia/params"
+
+#define NV_NMODULE_NVIDIA_MODULE_NAME "nvidia%d"
+#define NV_NMODULE_PROC_REGISTRY_PATH "/proc/driver/nvidia/%d/params"
 
 #define NV_DEVICE_FILE_MODE_MASK (S_IRWXU|S_IRWXG|S_IRWXO)
 #define NV_DEVICE_FILE_MODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)
@@ -56,15 +61,95 @@
 
 #define NV_MAJOR_DEVICE_NUMBER 195
 
+
+/*
+ * Construct the nvidia kernel module name based on the input 
+ * module instance provided.  If an error occurs, the null 
+ * terminator will be written to nv_module_name[0].
+ */
+static __inline__ void assign_nvidia_kernel_module_name
+(
+    char nv_module_name[NV_MAX_MODULE_NAME_SIZE],
+    int module_instance
+)
+{
+    int ret;
+
+    if (is_multi_module(module_instance))
+    {
+        ret = snprintf(nv_module_name, NV_MAX_MODULE_NAME_SIZE, 
+                       NV_NMODULE_NVIDIA_MODULE_NAME, module_instance);
+    }
+    else
+    {
+        ret = snprintf(nv_module_name, NV_MAX_MODULE_NAME_SIZE, 
+                       NV_NVIDIA_MODULE_NAME);
+    }
+
+    if (ret <= 0)
+    {
+        goto fail;
+    }
+
+    nv_module_name[NV_MAX_MODULE_NAME_SIZE - 1] = '\0';
+
+    return;
+
+fail:
+
+    nv_module_name[0] = '\0';
+}
+
+
+/*
+ * Construct the proc registry path name based on the input 
+ * module instance provided.  If an error occurs, the null 
+ * terminator will be written to proc_path[0].
+ */
+static __inline__ void assign_proc_registry_path
+(
+    char proc_path[NV_MAX_PROC_REGISTRY_PATH_SIZE],
+    int module_instance
+)
+{
+    int ret;
+
+    if (is_multi_module(module_instance))
+    {
+        ret = snprintf(proc_path, NV_MAX_PROC_REGISTRY_PATH_SIZE, 
+                       NV_NMODULE_PROC_REGISTRY_PATH, module_instance);
+    }
+    else
+    {
+        ret = snprintf(proc_path, NV_MAX_PROC_REGISTRY_PATH_SIZE, 
+                       NV_PROC_REGISTRY_PATH);
+    }
+
+    if (ret <= 0)
+    {
+        goto fail;
+    }
+
+    proc_path[NV_MAX_PROC_REGISTRY_PATH_SIZE - 1] = '\0';
+
+    return;
+
+fail:
+
+    proc_path[0] = '\0';
+}
+
+
 /*
  * Check whether the NVIDIA kernel module is loaded by reading
  * NV_PROC_MODULES_PATH; returns 1 if the kernel module is loaded.
  * Otherwise, it returns 0.
  */
-static int is_kernel_module_loaded(void)
+static int is_kernel_module_loaded(int module_instance)
 {
     FILE *fp;
-    char module_name[16];
+    char module_name[NV_MAX_MODULE_NAME_SIZE];
+    char nv_module_name[NV_MAX_MODULE_NAME_SIZE];
     int module_loaded = 0;
 
     fp = fopen(NV_PROC_MODULES_PATH, "r");
@@ -73,11 +158,17 @@ static int is_kernel_module_loaded(void)
     {
         return 0;
     }
+    assign_nvidia_kernel_module_name(nv_module_name, module_instance);
+
+    if (nv_module_name[0] == '\0')
+    {
+        return 0;
+    }
 
     while (fscanf(fp, "%15s%*[^\n]\n", module_name) == 1)
     {
         module_name[15] = '\0';
-        if (strcmp(module_name, NV_NVIDIA_MODULE_NAME) == 0)
+        if (strcmp(module_name, nv_module_name) == 0)
         {
             module_loaded = 1;
             break;
@@ -98,9 +189,10 @@ static int is_kernel_module_loaded(void)
  * If any error is encountered and print_errors is non-0, then print the
  * error to stderr.
  */
-int nvidia_modprobe(const int print_errors)
+int nvidia_modprobe(const int print_errors, int module_instance)
 {
     char modprobe_path[NV_PROC_MODPROBE_PATH_MAX];
+    char nv_module_name[NV_MAX_MODULE_NAME_SIZE];
     int status = 1;
     pid_t pid;
     const char *envp[] = { "PATH=/sbin", NULL };
@@ -110,7 +202,7 @@ int nvidia_modprobe(const int print_errors)
 
     /* If the kernel module is already loaded, nothing more to do: success. */
 
-    if (is_kernel_module_loaded())
+    if (is_kernel_module_loaded(module_instance))
     {
         return 1;
     }
@@ -157,6 +249,13 @@ int nvidia_modprobe(const int print_errors)
         sprintf(modprobe_path, "/sbin/modprobe");
     }
 
+    assign_nvidia_kernel_module_name(nv_module_name, module_instance);
+
+    if (nv_module_name[0] == '\0')
+    {
+        return 0;
+    }
+
     /* Fork and exec modprobe from the child process. */
 
     switch (pid = fork())
@@ -164,7 +263,7 @@ int nvidia_modprobe(const int print_errors)
         case 0:
 
             execle(modprobe_path, "modprobe",
-                   NV_NVIDIA_MODULE_NAME, NULL, envp);
+                   nv_module_name, NULL, envp);
 
             /* If execl(3) returned, then an error has occurred. */
 
@@ -205,19 +304,27 @@ int nvidia_modprobe(const int print_errors)
  * the attributes are managed globally, and can be adjusted via the
  * appropriate kernel module parameters.
  */
-static void init_device_file_parameters(uid_t *uid, gid_t *gid,
-                                        mode_t *mode, int *modify)
+static void init_device_file_parameters(uid_t *uid, gid_t *gid, mode_t *mode, 
+                                        int *modify, int module_instance)
 {
     FILE *fp;
     char name[32];
     unsigned int value;
+    char proc_path[NV_MAX_PROC_REGISTRY_PATH_SIZE];
 
     *mode = NV_DEVICE_FILE_MODE;
     *uid = NV_DEVICE_FILE_UID;
     *gid = NV_DEVICE_FILE_GID;
     *modify = 1;
 
-    fp = fopen(NV_PROC_REGISTRY_PATH, "r");
+    assign_proc_registry_path(proc_path, module_instance);
+
+    if (proc_path[0] == '\0')
+    {
+        return;
+    }
+
+    fp = fopen(proc_path, "r");
 
     if (fp == NULL)
     {
@@ -254,7 +361,7 @@ static void init_device_file_parameters(uid_t *uid, gid_t *gid,
  * number.  Returns 1 if the file is successfully created; returns 0
  * if the file could not be created.
  */
-int nvidia_mknod(int minor)
+int nvidia_mknod(int minor, int module_instance)
 {
     dev_t dev = NV_MAKE_DEVICE(NV_MAJOR_DEVICE_NUMBER, minor);
     char path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
@@ -266,13 +373,14 @@ int nvidia_mknod(int minor)
     struct stat stat_buf;
     int do_mknod;
 
-    assign_device_file_name(path, minor);
+    assign_device_file_name(path, minor, module_instance);
     if (path[0] == '\0')
     {
         return 0;
     }
 
-    init_device_file_parameters(&uid, &gid, &mode, &modification_allowed);
+    init_device_file_parameters(&uid, &gid, &mode, &modification_allowed, 
+                                module_instance);
 
     /* If device file modification is not allowed, nothing to do: success. */
 

@@ -22,6 +22,8 @@ nvidia\-modprobe \- Load the NVIDIA kernel module and create NVIDIA character de
 .br
 .BI "nvidia\-modprobe [" "options" "] \-\-create\-nvidia\-device\-file=" MINOR-NUMBER "
 .br
+.BI "nvidia\-modprobe [" "options" "] \-\-module\-instance=" MODULE-INSTANCE "
+.br
 
 .SH DESCRIPTION
 The
@@ -40,7 +42,11 @@ by hand: the NVIDIA user-space driver components will fork(2)/exec(3) it when ne
 .PP
 When run without any options,
 .B nvidia\-modprobe
-will load the NVIDIA kernel module and then exit.  When the
+will load the NVIDIA kernel module and then exit. When the
+.B \-\-module\-instance
+option is specified on systems with multiple NVIDIA kernel modules,
+.B nvidia\-modprobe
+will load the corresponding NVIDIA kernel module and then exit. When the
 .B \-\-create\-nvidia\-device\-file
 option is specified,
 .B nvidia\-modprobe
@@ -63,6 +69,9 @@ Run `/sbin/modprobe nvidia` and create
 and
 .I
 /dev/nvidia1
+.TP
+.B nvidia\-modprobe -i 0
+Run `/sbin/modprobe nvidia0`
 .
 
 .SH AUTHOR
