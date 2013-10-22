@@ -150,22 +150,24 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* Load the kernel module. */
-
-    ret = nvidia_modprobe(0, module_instance);
-    if (!ret)
     {
-        goto done;
-    }
+        /* Load the kernel module. */
 
-    /* Create any device files requested. */
-
-    for (i = 0; i < num_minors; i++)
-    {
-        ret = nvidia_mknod(minors[i], module_instance);
+        ret = nvidia_modprobe(0, module_instance);
         if (!ret)
         {
             goto done;
+        }
+
+        /* Create any device files requested. */
+
+        for (i = 0; i < num_minors; i++)
+        {
+            ret = nvidia_mknod(minors[i], module_instance);
+            if (!ret)
+            {
+                goto done;
+            }
         }
     }
 

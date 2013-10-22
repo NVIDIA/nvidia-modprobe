@@ -41,16 +41,21 @@
 
 #define NV_PROC_MODPROBE_PATH "/proc/sys/kernel/modprobe"
 #define NV_PROC_MODULES_PATH "/proc/modules"
+#define NV_PROC_DEVICES_PATH "/proc/devices"
 
 #define NV_PROC_MODPROBE_PATH_MAX        1024
 #define NV_MAX_MODULE_NAME_SIZE          16
 #define NV_MAX_PROC_REGISTRY_PATH_SIZE   NV_MAX_CHARACTER_DEVICE_FILE_STRLEN
+#define NV_MAX_LINE_LENGTH               256
 
 #define NV_NVIDIA_MODULE_NAME "nvidia"
 #define NV_PROC_REGISTRY_PATH "/proc/driver/nvidia/params"
 
 #define NV_NMODULE_NVIDIA_MODULE_NAME "nvidia%d"
 #define NV_NMODULE_PROC_REGISTRY_PATH "/proc/driver/nvidia/%d/params"
+
+#define NV_UVM_MODULE_NAME "nvidia-uvm"
+#define NV_UVM_DEVICE_NAME "/dev/nvidia-uvm"
 
 #define NV_DEVICE_FILE_MODE_MASK (S_IRWXU|S_IRWXG|S_IRWXO)
 #define NV_DEVICE_FILE_MODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)
@@ -60,7 +65,6 @@
 #define NV_MAKE_DEVICE(x,y) ((dev_t)((x) << 8 | (y)))
 
 #define NV_MAJOR_DEVICE_NUMBER 195
-
 
 /*
  * Construct the nvidia kernel module name based on the input 
@@ -141,15 +145,47 @@ fail:
 
 
 /*
- * Check whether the NVIDIA kernel module is loaded by reading
+ * Just like strcmp(3), except that differences between '-' and '_' are
+ * ignored. This is useful for comparing module names, where '-' and '_'
+ * are supposed to be treated interchangeably.
+ */
+static int modcmp(const char *a, const char *b)
+{
+    int i;
+
+    /* Walk both strings and compare each character */
+    for (i = 0; a[i] && b[i]; i++)
+    {
+        if (a[i] != b[i])
+        {
+            /* ignore differences between '-' and '_' */
+            if (((a[i] == '-') || (a[i] == '_')) &&
+                ((b[i] == '-') || (b[i] == '_')))
+            {
+                continue;
+            }
+
+            break;
+        }
+    }
+
+    /*
+     * If the strings are of unequal length, only one of a[i] or b[i] == '\0'.
+     * If they are the same length, both will be '\0', and the strings match.
+     */
+    return a[i] - b[i];
+}
+
+
+/*
+ * Check whether the specified module is loaded by reading
  * NV_PROC_MODULES_PATH; returns 1 if the kernel module is loaded.
  * Otherwise, it returns 0.
  */
-static int is_kernel_module_loaded(int module_instance)
+static int is_kernel_module_loaded(const char *nv_module_name)
 {
     FILE *fp;
     char module_name[NV_MAX_MODULE_NAME_SIZE];
-    char nv_module_name[NV_MAX_MODULE_NAME_SIZE];
     int module_loaded = 0;
 
     fp = fopen(NV_PROC_MODULES_PATH, "r");
@@ -158,17 +194,11 @@ static int is_kernel_module_loaded(int module_instance)
     {
         return 0;
     }
-    assign_nvidia_kernel_module_name(nv_module_name, module_instance);
-
-    if (nv_module_name[0] == '\0')
-    {
-        return 0;
-    }
 
     while (fscanf(fp, "%15s%*[^\n]\n", module_name) == 1)
     {
         module_name[15] = '\0';
-        if (strcmp(module_name, nv_module_name) == 0)
+        if (modcmp(module_name, nv_module_name) == 0)
         {
             module_loaded = 1;
             break;
@@ -182,17 +212,16 @@ static int is_kernel_module_loaded(int module_instance)
 
 
 /*
- * Attempt to load the kernel module; returns 1 if kernel module is
+ * Attempt to load a kernel module; returns 1 if kernel module is
  * successfully loaded.  Returns 0 if the kernel module could not be
  * loaded.
  *
  * If any error is encountered and print_errors is non-0, then print the
  * error to stderr.
  */
-int nvidia_modprobe(const int print_errors, int module_instance)
+static int modprobe_helper(const int print_errors, const char *module_name)
 {
     char modprobe_path[NV_PROC_MODPROBE_PATH_MAX];
-    char nv_module_name[NV_MAX_MODULE_NAME_SIZE];
     int status = 1;
     pid_t pid;
     const char *envp[] = { "PATH=/sbin", NULL };
@@ -200,9 +229,13 @@ int nvidia_modprobe(const int print_errors, int module_instance)
 
     modprobe_path[0] = '\0';
 
+    if (module_name == NULL || module_name[0] == '\0') {
+        return 0;
+    }
+
     /* If the kernel module is already loaded, nothing more to do: success. */
 
-    if (is_kernel_module_loaded(module_instance))
+    if (is_kernel_module_loaded(module_name))
     {
         return 1;
     }
@@ -249,13 +282,6 @@ int nvidia_modprobe(const int print_errors, int module_instance)
         sprintf(modprobe_path, "/sbin/modprobe");
     }
 
-    assign_nvidia_kernel_module_name(nv_module_name, module_instance);
-
-    if (nv_module_name[0] == '\0')
-    {
-        return 0;
-    }
-
     /* Fork and exec modprobe from the child process. */
 
     switch (pid = fork())
@@ -263,7 +289,7 @@ int nvidia_modprobe(const int print_errors, int module_instance)
         case 0:
 
             execle(modprobe_path, "modprobe",
-                   nv_module_name, NULL, envp);
+                   module_name, NULL, envp);
 
             /* If execl(3) returned, then an error has occurred. */
 
@@ -298,6 +324,19 @@ int nvidia_modprobe(const int print_errors, int module_instance)
 
 
 /*
+ * Attempt to load an NVIDIA kernel module
+ */
+int nvidia_modprobe(const int print_errors, int module_instance)
+{
+    char nv_module_name[NV_MAX_MODULE_NAME_SIZE];
+
+    assign_nvidia_kernel_module_name(nv_module_name, module_instance);
+
+    return modprobe_helper(print_errors, nv_module_name);
+}
+
+
+/*
  * Determine the requested device file parameters: allow users to
  * override the default UID/GID and/or mode of the NVIDIA device
  * files, or even whether device file modification should be allowed;
@@ -305,21 +344,18 @@ int nvidia_modprobe(const int print_errors, int module_instance)
  * appropriate kernel module parameters.
  */
 static void init_device_file_parameters(uid_t *uid, gid_t *gid, mode_t *mode, 
-                                        int *modify, int module_instance)
+                                        int *modify, const char *proc_path)
 {
     FILE *fp;
     char name[32];
     unsigned int value;
-    char proc_path[NV_MAX_PROC_REGISTRY_PATH_SIZE];
 
     *mode = NV_DEVICE_FILE_MODE;
     *uid = NV_DEVICE_FILE_UID;
     *gid = NV_DEVICE_FILE_GID;
     *modify = 1;
 
-    assign_proc_registry_path(proc_path, module_instance);
-
-    if (proc_path[0] == '\0')
+    if (proc_path == NULL || proc_path[0] == '\0')
     {
         return;
     }
@@ -357,14 +393,15 @@ static void init_device_file_parameters(uid_t *uid, gid_t *gid, mode_t *mode,
 
 
 /*
- * Attempt to create the NVIDIA device file with the specified minor
- * number.  Returns 1 if the file is successfully created; returns 0
+ * Attempt to create the specified device file with the specified major
+ * and minor number.  If proc_path is specified, scan it for custom file
+ * permissions.  Returns 1 if the file is successfully created; returns 0
  * if the file could not be created.
  */
-int nvidia_mknod(int minor, int module_instance)
+static int mknod_helper(int major, int minor, const char *path,
+                        const char *proc_path)
 {
-    dev_t dev = NV_MAKE_DEVICE(NV_MAJOR_DEVICE_NUMBER, minor);
-    char path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    dev_t dev = NV_MAKE_DEVICE(major, minor);
     mode_t mode;
     uid_t uid;
     gid_t gid;
@@ -373,14 +410,13 @@ int nvidia_mknod(int minor, int module_instance)
     struct stat stat_buf;
     int do_mknod;
 
-    assign_device_file_name(path, minor, module_instance);
-    if (path[0] == '\0')
+    if (path == NULL || path[0] == '\0')
     {
         return 0;
     }
 
     init_device_file_parameters(&uid, &gid, &mode, &modification_allowed, 
-                                module_instance);
+                                proc_path);
 
     /* If device file modification is not allowed, nothing to do: success. */
 
@@ -456,6 +492,122 @@ int nvidia_mknod(int minor, int module_instance)
     }
 
     return 1;
+}
+
+
+/*
+ * Attempt to create a device file with the specified minor number for
+ * the specified NVIDIA module instance.
+ */
+int nvidia_mknod(int minor, int module_instance)
+{
+    char path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    char proc_path[NV_MAX_PROC_REGISTRY_PATH_SIZE];
+
+    assign_device_file_name(path, minor, module_instance);
+    assign_proc_registry_path(proc_path, module_instance);
+
+    return mknod_helper(NV_MAJOR_DEVICE_NUMBER, minor, path, proc_path);
+}
+
+
+/*
+ * Scan NV_PROC_DEVICES_PATH to find the major number of the character
+ * device with the specified name.  Returns the major number on success,
+ * or -1 on failure.
+ */
+static int get_chardev_major(const char *name)
+{
+    int ret = -1;
+    char line[NV_MAX_LINE_LENGTH];
+    FILE *fp;
+
+    line[NV_MAX_LINE_LENGTH - 1] = '\0';
+
+    fp = fopen(NV_PROC_DEVICES_PATH, "r");
+    if (!fp)
+    {
+        goto done;
+    }
+
+    /* Find the beginning of the 'Character devices:' section */
+
+    while (fgets(line, NV_MAX_LINE_LENGTH - 1, fp))
+    {
+        if (strcmp(line, "Character devices:\n") == 0)
+        {
+            break;
+        }
+    }
+
+    if (ferror(fp)) {
+        goto done;
+    }
+
+    /* Search for the given module name */
+
+    while (fgets(line, NV_MAX_LINE_LENGTH - 1, fp))
+    {
+        char *found;
+
+        if (strcmp(line, "\n") == 0 )
+        {
+            /* we've reached the end of the 'Character devices:' section */
+            break;
+        }
+
+        found = strstr(line, name);
+
+        /* Check for a newline to avoid partial matches */
+
+        if (found && found[strlen(name)] == '\n')
+        {
+            int major;
+
+            /* Read the device major number */
+
+            if (sscanf(line, " %d %*s", &major) == 1)
+            {
+                ret = major;
+            }
+
+            break;
+        }
+    }
+
+done:
+
+    if (fp)
+    {
+        fclose(fp);
+    }
+
+    return ret;
+}
+
+
+/*
+ * Attempt to create the NVIDIA Unified Memory device file
+ */
+int nvidia_uvm_mknod(int minor)
+{
+    int major = get_chardev_major(NV_UVM_MODULE_NAME);
+
+    if (major < 0)
+    {
+        return 0;
+    }
+
+    return mknod_helper(major, minor, NV_UVM_DEVICE_NAME, NULL);
+}
+
+
+/*
+ * Attempt to load the NVIDIA Unified Memory kernel module
+ */
+int nvidia_uvm_modprobe(const int print_errors)
+{
+    return modprobe_helper(print_errors, NV_UVM_MODULE_NAME);
 }
 
 #endif /* NV_LINUX */
