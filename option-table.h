@@ -46,5 +46,12 @@ static const NVGetoptOption __options[] = {
       "specified &MODULE-INSTANCE& value. The value should be between "
       "0 and 7." },
 
+    { "unified-memory",
+      'u',
+       0,
+       NULL,
+       "Load the NVIDIA Unified Memory kernel module or create device files "
+       "for it, instead of the NVIDIA kernel module." },
+
     { NULL, 0, 0, NULL, NULL },
 };

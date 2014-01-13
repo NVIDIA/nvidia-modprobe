@@ -95,6 +95,7 @@ int main(int argc, char *argv[])
     int num_minors = 0;
     int i, ret = 1;
     int module_instance = NV_MODULE_INSTANCE_NONE;
+    int uvm_modprobe = FALSE;
 
     while (1)
     {
@@ -143,6 +144,9 @@ int main(int argc, char *argv[])
                     exit(1);
                 }
                 break;
+            case 'u':
+                uvm_modprobe = TRUE;
+                break;
             default:
                 fmterr("Invalid commandline, please run `%s --help` "
                        "for usage information.\n", argv[0]);
@@ -150,6 +154,28 @@ int main(int argc, char *argv[])
         }
     }
 
+    if (uvm_modprobe)
+    {
+        /* Load the Unified Memory kernel module */
+
+        ret = nvidia_uvm_modprobe(0);
+        if (!ret)
+        {
+            goto done;
+        }
+
+        /* Create any device files requested */
+
+        for (i = 0; i < num_minors; i++)
+        {
+            ret = nvidia_uvm_mknod(minors[i]);
+            if (!ret)
+            {
+                goto done;
+            }
+        }
+    }
+    else
     {
         /* Load the kernel module. */
 
