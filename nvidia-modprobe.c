@@ -42,37 +42,39 @@
 #include "nvgetopt.h"
 #include "option-table.h"
 #include "common-utils.h"
+#include "msg.h"
 
 extern const char *pNV_ID;
 
 
 static void print_version(void)
 {
-    fmtout("");
-    fmtout("%s", pNV_ID);
-    fmtout("");
-    fmtoutp(TAB, "Copyright (C) 2013 NVIDIA Corporation.");
-    fmtout("");
+    nv_info_msg(NULL, "");
+    nv_info_msg(NULL, "%s", pNV_ID);
+    nv_info_msg(NULL, "");
+    nv_info_msg(TAB, "Copyright (C) 2013 NVIDIA Corporation.");
+    nv_info_msg(NULL, "");
 }
 
 
 static void print_summary(void)
 {
-    fmtout("");
-    fmtoutp(TAB, "This setuid program is used to create, in a Linux "
-            "distribution-independent way, NVIDIA Linux device "
-            "files and load the NVIDIA kernel module, on behalf of NVIDIA "
-            "Linux driver components which may not have sufficient "
-            "privileges to perform these actions on their own.");
-    fmtout("");
+    nv_info_msg(NULL, "");
+    nv_info_msg(TAB, "This setuid program is used to create, in a Linux "
+                     "distribution-independent way, NVIDIA Linux device "
+                     "files and load the NVIDIA kernel module, on behalf of "
+                     "NVIDIA Linux driver components which may not have "
+                     "sufficient privileges to perform these actions on their "
+                     "own.");
+    nv_info_msg(NULL, "");
 }
 
 
 static void print_help_helper(const char *name, const char *description)
 {
-    fmtoutp(TAB, "%s", name);
-    fmtoutp(BIGTAB, "%s", description);
-    fmtout("");
+    nv_info_msg(TAB, "%s", name);
+    nv_info_msg(BIGTAB, "%s", description);
+    nv_info_msg(NULL, "");
 }
 
 
@@ -81,9 +83,9 @@ static void print_help(void)
     print_version();
     print_summary();
 
-    fmtout("");
-    fmtout("nvidia-modprobe [options]");
-    fmtout("");
+    nv_info_msg(NULL, "");
+    nv_info_msg(NULL, "nvidia-modprobe [options]");
+    nv_info_msg(NULL, "");
 
     nvgetopt_print_help(__options, 0, print_help_helper);
 }
@@ -127,7 +129,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    fmterr("Too many NVIDIA character device files requested.");
+                    nv_error_msg("Too many NVIDIA character device files requested.");
                     exit(1);
                 }
                 break;            
@@ -139,8 +141,8 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    fmterr("Module instance must be in the range from "
-                           "0 to %d.\n", (NV_MAX_MODULE_INSTANCES-1));
+                    nv_error_msg("Module instance must be in the range from "
+                                 "0 to %d.\n", (NV_MAX_MODULE_INSTANCES-1));
                     exit(1);
                 }
                 break;
@@ -148,8 +150,8 @@ int main(int argc, char *argv[])
                 uvm_modprobe = TRUE;
                 break;
             default:
-                fmterr("Invalid commandline, please run `%s --help` "
-                       "for usage information.\n", argv[0]);
+                nv_error_msg("Invalid commandline, please run `%s --help` "
+                             "for usage information.\n", argv[0]);
                 exit(1);
         }
     }
