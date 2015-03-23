@@ -51,6 +51,8 @@
     ((x <= NV_FRONTEND_CONTROL_DEVICE_MINOR_MAX) && \
      (x > NV_FRONTEND_CONTROL_DEVICE_MINOR_MIN))
 
+#define NV_PCI_VENDOR_ID    0x10DE
+
 #if defined(NV_LINUX)
 
 int nvidia_modprobe(const int print_errors, int module_instance);

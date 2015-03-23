@@ -38,6 +38,7 @@
 #include <sys/wait.h>
 
 #include "nvidia-modprobe-utils.h"
+#include "pci-enum.h"
 
 #define NV_PROC_MODPROBE_PATH "/proc/sys/kernel/modprobe"
 #define NV_PROC_MODULES_PATH "/proc/modules"
@@ -227,6 +228,20 @@ static int modprobe_helper(const int print_errors, const char *module_name)
     const char *envp[] = { "PATH=/sbin", NULL };
     FILE *fp;
 
+    /*
+     * Use PCI_BASE_CLASS_MASK to cover both types of DISPLAY controllers that
+     * NVIDIA ships (VGA = 0x300 and 3D = 0x302).
+     */
+    struct pci_id_match id_match = {
+        NV_PCI_VENDOR_ID,       /* Vendor ID    = 0x10DE                 */
+        PCI_MATCH_ANY,          /* Device ID    = any                    */
+        PCI_MATCH_ANY,          /* Subvendor ID = any                    */
+        PCI_MATCH_ANY,          /* Subdevice ID = any                    */
+        0x0300,                 /* Device Class = PCI_BASE_CLASS_DISPLAY */
+        PCI_BASE_CLASS_MASK,    /* Display Mask = base class only        */
+        0                       /* Initial number of matches             */
+    };
+
     modprobe_path[0] = '\0';
 
     if (module_name == NULL || module_name[0] == '\0') {
@@ -238,6 +253,27 @@ static int modprobe_helper(const int print_errors, const char *module_name)
     if (is_kernel_module_loaded(module_name))
     {
         return 1;
+    }
+
+    /*
+     * Before attempting to load the module, look for any NVIDIA PCI devices.
+     * If none exist, exit instead of attempting the modprobe, because doing so
+     * would issue error messages that are really irrelevant if there are no
+     * NVIDIA PCI devices present.
+     *
+     * If our check fails, for whatever reason, continue with the modprobe just
+     * in case.
+     */
+    status = pci_enum_match_id(&id_match);
+    if (status == 0 && id_match.num_matches == 0)
+    {
+        if (print_errors)
+        {
+            fprintf(stderr,
+                    "NVIDIA: no NVIDIA devices found\n");
+        }
+
+        return 0;
     }
 
     /* Only attempt to load the kernel module if root. */
