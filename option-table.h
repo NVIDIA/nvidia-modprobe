@@ -53,5 +53,11 @@ static const NVGetoptOption __options[] = {
        "Load the NVIDIA Unified Memory kernel module or create device files "
        "for it, instead of the NVIDIA kernel module." },
 
+    { "modeset",
+      'm',
+       0,
+       NULL,
+      "Load the NVIDIA modeset kernel module and create its device file." },
+
     { NULL, 0, 0, NULL, NULL },
 };

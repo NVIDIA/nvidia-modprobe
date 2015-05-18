@@ -58,6 +58,8 @@
 #define NV_UVM_MODULE_NAME "nvidia-uvm"
 #define NV_UVM_DEVICE_NAME "/dev/nvidia-uvm"
 
+#define NV_MODESET_MODULE_NAME "nvidia-modeset"
+
 #define NV_DEVICE_FILE_MODE_MASK (S_IRWXU|S_IRWXG|S_IRWXO)
 #define NV_DEVICE_FILE_MODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)
 #define NV_DEVICE_FILE_UID 0
@@ -67,9 +69,11 @@
 
 #define NV_MAJOR_DEVICE_NUMBER 195
 
+#define NV_PCI_VENDOR_ID    0x10DE
+
 /*
- * Construct the nvidia kernel module name based on the input 
- * module instance provided.  If an error occurs, the null 
+ * Construct the nvidia kernel module name based on the input
+ * module instance provided.  If an error occurs, the null
  * terminator will be written to nv_module_name[0].
  */
 static __inline__ void assign_nvidia_kernel_module_name
@@ -82,12 +86,12 @@ static __inline__ void assign_nvidia_kernel_module_name
 
     if (is_multi_module(module_instance))
     {
-        ret = snprintf(nv_module_name, NV_MAX_MODULE_NAME_SIZE, 
+        ret = snprintf(nv_module_name, NV_MAX_MODULE_NAME_SIZE,
                        NV_NMODULE_NVIDIA_MODULE_NAME, module_instance);
     }
     else
     {
-        ret = snprintf(nv_module_name, NV_MAX_MODULE_NAME_SIZE, 
+        ret = snprintf(nv_module_name, NV_MAX_MODULE_NAME_SIZE,
                        NV_NVIDIA_MODULE_NAME);
     }
 
@@ -107,8 +111,8 @@ fail:
 
 
 /*
- * Construct the proc registry path name based on the input 
- * module instance provided.  If an error occurs, the null 
+ * Construct the proc registry path name based on the input
+ * module instance provided.  If an error occurs, the null
  * terminator will be written to proc_path[0].
  */
 static __inline__ void assign_proc_registry_path
@@ -121,12 +125,12 @@ static __inline__ void assign_proc_registry_path
 
     if (is_multi_module(module_instance))
     {
-        ret = snprintf(proc_path, NV_MAX_PROC_REGISTRY_PATH_SIZE, 
+        ret = snprintf(proc_path, NV_MAX_PROC_REGISTRY_PATH_SIZE,
                        NV_NMODULE_PROC_REGISTRY_PATH, module_instance);
     }
     else
     {
-        ret = snprintf(proc_path, NV_MAX_PROC_REGISTRY_PATH_SIZE, 
+        ret = snprintf(proc_path, NV_MAX_PROC_REGISTRY_PATH_SIZE,
                        NV_PROC_REGISTRY_PATH);
     }
 
@@ -379,7 +383,7 @@ int nvidia_modprobe(const int print_errors, int module_instance)
  * the attributes are managed globally, and can be adjusted via the
  * appropriate kernel module parameters.
  */
-static void init_device_file_parameters(uid_t *uid, gid_t *gid, mode_t *mode, 
+static void init_device_file_parameters(uid_t *uid, gid_t *gid, mode_t *mode,
                                         int *modify, const char *proc_path)
 {
     FILE *fp;
@@ -451,7 +455,7 @@ static int mknod_helper(int major, int minor, const char *path,
         return 0;
     }
 
-    init_device_file_parameters(&uid, &gid, &mode, &modification_allowed, 
+    init_device_file_parameters(&uid, &gid, &mode, &modification_allowed,
                                 proc_path);
 
     /* If device file modification is not allowed, nothing to do: success. */
@@ -644,6 +648,30 @@ int nvidia_uvm_mknod(int minor)
 int nvidia_uvm_modprobe(const int print_errors)
 {
     return modprobe_helper(print_errors, NV_UVM_MODULE_NAME);
+}
+
+
+/*
+ * Attempt to load the NVIDIA modeset driver.
+ */
+int nvidia_modeset_modprobe(void)
+{
+    return modprobe_helper(0, NV_MODESET_MODULE_NAME);
+}
+
+
+/*
+ * Attempt to create the NVIDIA modeset driver device file.
+ */
+int nvidia_modeset_mknod(void)
+{
+    char proc_path[NV_MAX_PROC_REGISTRY_PATH_SIZE];
+
+    assign_proc_registry_path(proc_path, 0);
+
+    return mknod_helper(NV_MAJOR_DEVICE_NUMBER,
+                        NV_MODESET_MINOR_DEVICE_NUM,
+                        NV_MODESET_DEVICE_NAME, proc_path);
 }
 
 #endif /* NV_LINUX */

@@ -35,11 +35,13 @@
 #define NV_MODULE_INSTANCE_ZERO              0
 #define NV_MAX_MODULE_INSTANCES              8
 #define NV_CTL_DEVICE_NUM                    255
+#define NV_MODESET_MINOR_DEVICE_NUM          254
 
 #define NV_FRONTEND_CONTROL_DEVICE_MINOR_MAX NV_CTL_DEVICE_NUM
 
 #define NV_DEVICE_FILE_PATH "/dev/nvidia%d"
 #define NV_CTRL_DEVICE_FILE_PATH "/dev/nvidiactl"
+#define NV_MODESET_DEVICE_NAME "/dev/nvidia-modeset"
 
 #define NV_NMODULE_CTRL_DEVICE_FILE_PATH "/dev/nvidiactl%d"
 
@@ -51,14 +53,14 @@
     ((x <= NV_FRONTEND_CONTROL_DEVICE_MINOR_MAX) && \
      (x > NV_FRONTEND_CONTROL_DEVICE_MINOR_MIN))
 
-#define NV_PCI_VENDOR_ID    0x10DE
-
 #if defined(NV_LINUX)
 
 int nvidia_modprobe(const int print_errors, int module_instance);
 int nvidia_mknod(int minor, int module_instance);
 int nvidia_uvm_modprobe(const int print_errors);
 int nvidia_uvm_mknod(int minor);
+int nvidia_modeset_modprobe(void);
+int nvidia_modeset_mknod(void);
 
 #endif /* NV_LINUX */
 

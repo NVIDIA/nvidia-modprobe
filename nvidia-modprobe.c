@@ -52,8 +52,6 @@ static void print_version(void)
     nv_info_msg(NULL, "");
     nv_info_msg(NULL, "%s", pNV_ID);
     nv_info_msg(NULL, "");
-    nv_info_msg(TAB, "Copyright (C) 2013 NVIDIA Corporation.");
-    nv_info_msg(NULL, "");
 }
 
 
@@ -98,6 +96,7 @@ int main(int argc, char *argv[])
     int i, ret = 1;
     int module_instance = NV_MODULE_INSTANCE_NONE;
     int uvm_modprobe = FALSE;
+    int modeset = FALSE;
 
     while (1)
     {
@@ -132,9 +131,9 @@ int main(int argc, char *argv[])
                     nv_error_msg("Too many NVIDIA character device files requested.");
                     exit(1);
                 }
-                break;            
+                break;
             case 'i':
-                if (intval < NV_MAX_MODULE_INSTANCES && 
+                if (intval < NV_MAX_MODULE_INSTANCES &&
                     intval >= NV_MODULE_INSTANCE_ZERO)
                 {
                     module_instance = intval;
@@ -145,6 +144,9 @@ int main(int argc, char *argv[])
                                  "0 to %d.\n", (NV_MAX_MODULE_INSTANCES-1));
                     exit(1);
                 }
+                break;
+            case 'm':
+                modeset = TRUE;
                 break;
             case 'u':
                 uvm_modprobe = TRUE;
@@ -196,6 +198,23 @@ int main(int argc, char *argv[])
             {
                 goto done;
             }
+        }
+    }
+
+    if (modeset)
+    {
+        /* Load the modeset kernel module and create its device file. */
+
+        ret = nvidia_modeset_modprobe();
+        if (!ret)
+        {
+            goto done;
+        }
+
+        ret = nvidia_modeset_mknod();
+        if (!ret)
+        {
+            goto done;
         }
     }
 
