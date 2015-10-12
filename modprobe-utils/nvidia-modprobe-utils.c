@@ -228,6 +228,7 @@ static int modprobe_helper(const int print_errors, const char *module_name)
 {
     char modprobe_path[NV_PROC_MODPROBE_PATH_MAX];
     int status = 1;
+    struct stat file_status;
     pid_t pid;
     const char *envp[] = { "PATH=/sbin", NULL };
     FILE *fp;
@@ -320,6 +321,15 @@ static int modprobe_helper(const int print_errors, const char *module_name)
     if (modprobe_path[0] == '\0')
     {
         sprintf(modprobe_path, "/sbin/modprobe");
+    }
+
+    /* Do not attempt to exec(3) modprobe if it does not exist. */
+
+    if (stat(modprobe_path, &file_status) != 0 ||
+        !S_ISREG(file_status.st_mode) ||
+        (file_status.st_mode & S_IXUSR) != S_IXUSR)
+    {
+        return 0;
     }
 
     /* Fork and exec modprobe from the child process. */
