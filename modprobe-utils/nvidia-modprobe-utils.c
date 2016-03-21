@@ -57,6 +57,7 @@
 
 #define NV_UVM_MODULE_NAME "nvidia-uvm"
 #define NV_UVM_DEVICE_NAME "/dev/nvidia-uvm"
+#define NV_UVM_TOOLS_DEVICE_NAME "/dev/nvidia-uvm-tools"
 
 #define NV_MODESET_MODULE_NAME "nvidia-modeset"
 
@@ -70,6 +71,8 @@
 #define NV_MAJOR_DEVICE_NUMBER 195
 
 #define NV_PCI_VENDOR_ID    0x10DE
+
+#define NV_MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 /*
  * Construct the nvidia kernel module name based on the input
@@ -297,10 +300,13 @@ static int modprobe_helper(const int print_errors, const char *module_name)
         size_t n;
 
         n = fread(modprobe_path, 1, sizeof(modprobe_path), fp);
-        if (n >= 1)
-        {
-            modprobe_path[n - 1] = '\0';
-        }
+
+        /*
+         * Null terminate the string, but make sure 'n' is in the range
+         * [0, sizeof(modprobe_path)-1].
+         */
+        n = NV_MIN(n, sizeof(modprobe_path) - 1);
+        modprobe_path[n] = '\0';
 
         /*
          * If str was longer than a line, we might still have a
@@ -639,7 +645,7 @@ done:
 /*
  * Attempt to create the NVIDIA Unified Memory device file
  */
-int nvidia_uvm_mknod(int minor)
+int nvidia_uvm_mknod(int base_minor)
 {
     int major = get_chardev_major(NV_UVM_MODULE_NAME);
 
@@ -648,7 +654,8 @@ int nvidia_uvm_mknod(int minor)
         return 0;
     }
 
-    return mknod_helper(major, minor, NV_UVM_DEVICE_NAME, NULL);
+    return mknod_helper(major, base_minor, NV_UVM_DEVICE_NAME, NULL) &&
+           mknod_helper(major, base_minor + 1, NV_UVM_TOOLS_DEVICE_NAME, NULL);
 }
 
 
