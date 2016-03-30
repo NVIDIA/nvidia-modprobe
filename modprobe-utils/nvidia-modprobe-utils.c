@@ -57,6 +57,7 @@
 
 #define NV_UVM_MODULE_NAME "nvidia-uvm"
 #define NV_UVM_DEVICE_NAME "/dev/nvidia-uvm"
+#define NV_UVM_TOOLS_DEVICE_NAME "/dev/nvidia-uvm-tools"
 
 #define NV_MODESET_MODULE_NAME "nvidia-modeset"
 
@@ -639,7 +640,7 @@ done:
 /*
  * Attempt to create the NVIDIA Unified Memory device file
  */
-int nvidia_uvm_mknod(int minor)
+int nvidia_uvm_mknod(int base_minor)
 {
     int major = get_chardev_major(NV_UVM_MODULE_NAME);
 
@@ -648,7 +649,8 @@ int nvidia_uvm_mknod(int minor)
         return 0;
     }
 
-    return mknod_helper(major, minor, NV_UVM_DEVICE_NAME, NULL);
+    return mknod_helper(major, base_minor, NV_UVM_DEVICE_NAME, NULL) &&
+           mknod_helper(major, base_minor + 1, NV_UVM_TOOLS_DEVICE_NAME, NULL);
 }
 
 
