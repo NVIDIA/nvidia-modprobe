@@ -118,7 +118,7 @@ find_matches(struct pci_id_match *match)
     {
         uint8_t config[48];
         uint16_t bytes;
-        unsigned dom, bus, dev, func;
+        uint16_t dom, bus, dev, func;
         uint16_t vendor_id, device_id, subvendor_id, subdevice_id;
         uint16_t device_class;
 
@@ -128,20 +128,17 @@ find_matches(struct pci_id_match *match)
             continue;
         }
 
-        sscanf(d->d_name, "%04x:%02x:%02x.%1u",
+        sscanf(d->d_name, "%04"SCNx16":%02"SCNx16":%02"SCNx16".%1"SCNu16,
                & dom, & bus, & dev, & func);
 
         err = pci_sysfs_read_cfg(dom, bus, dev, func, config, 48, & bytes);
         if ((bytes == 48) && !err)
         {
-            vendor_id = (uint16_t)config[0] + ((uint16_t)config[1] << 8);
-            device_id = (uint16_t)config[2] + ((uint16_t)config[3] << 8);
-            device_class = (uint16_t)config[10] +
-                ((uint16_t)config[11] << 8);
-            subvendor_id = (uint16_t)config[44] +
-                ((uint16_t)config[45] << 8);
-            subdevice_id = (uint16_t)config[46] +
-                ((uint16_t)config[47] << 8);
+            vendor_id = (uint16_t)(config[0] + (config[1] << 8));
+            device_id = (uint16_t)(config[2] + (config[3] << 8));
+            device_class = (uint16_t)(config[10] + (config[11] << 8));
+            subvendor_id = (uint16_t)(config[44] + (config[45] << 8));
+            subdevice_id = (uint16_t)(config[46] + (config[47] << 8));
 
             /*
              * This logic, originally in common_iterator.c, will tell if
@@ -213,13 +210,13 @@ pci_sysfs_read_cfg(uint16_t domain, uint16_t bus, uint16_t device,
             break;
         }
 
-        temp_size -= bytes;
+        temp_size = (uint16_t)(temp_size - bytes);
         data_bytes += bytes;
     }
     
     if (bytes_read != NULL)
     {
-        *bytes_read = size - temp_size;
+        *bytes_read = (uint16_t)(size - temp_size);
     }
 
     close(fd);

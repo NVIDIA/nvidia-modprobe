@@ -470,7 +470,7 @@ static void init_device_file_parameters(uid_t *uid, gid_t *gid, mode_t *mode,
         }
         if (strcmp(name, "ModifyDeviceFiles") == 0)
         {
-            *modify = value;
+            *modify = (int)value;
         }
     }
 
