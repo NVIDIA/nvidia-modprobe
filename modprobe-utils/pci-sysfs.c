@@ -53,8 +53,14 @@
 #include <errno.h>
 
 #include "pci-enum.h"
+#include "pci-sysfs.h"
 
-#define SYS_BUS_PCI "/sys/bus/pci/devices"
+#define SYS_BUS_PCI                     "/sys/bus/pci/"
+#define SYS_BUS_PCI_DEVICES SYS_BUS_PCI "devices"
+#define SYS_BUS_PCI_RESCAN  SYS_BUS_PCI "rescan"
+#define SYSFS_PCI_BRIDGE_RESCAN_FMT     SYS_BUS_PCI_DEVICES "/%04x:%02x:%02x.%1x/rescan"
+#define SYSFS_RESCAN_STRING             "1\n"
+#define SYSFS_RESCAN_STRING_SIZE        2
 
 static int pci_sysfs_read_cfg(uint16_t, uint16_t, uint16_t, uint16_t, void *,
                               uint16_t size, uint16_t *);
@@ -77,7 +83,7 @@ pci_enum_match_id(struct pci_id_match *match)
      * can be accessed using this interface.
      */
     match->num_matches = 0;
-    if (stat(SYS_BUS_PCI, &st) == 0)
+    if (stat(SYS_BUS_PCI_DEVICES, &st) == 0)
     {
         err = find_matches(match);
     }
@@ -102,7 +108,7 @@ find_matches(struct pci_id_match *match)
     DIR *sysfs_pci_dir;
     int err = 0;
 
-    sysfs_pci_dir = opendir(SYS_BUS_PCI);
+    sysfs_pci_dir = opendir(SYS_BUS_PCI_DEVICES);
     if (sysfs_pci_dir == NULL)
     {
         return errno;
@@ -185,7 +191,7 @@ pci_sysfs_read_cfg(uint16_t domain, uint16_t bus, uint16_t device,
      * device.
      */
     snprintf(name, 255, "%s/%04x:%02x:%02x.%1u/config",
-             SYS_BUS_PCI, domain, bus, device, function);
+             SYS_BUS_PCI_DEVICES, domain, bus, device, function);
 
     fd = open(name, O_RDONLY);
     if (fd < 0)
@@ -218,6 +224,40 @@ pci_sysfs_read_cfg(uint16_t domain, uint16_t bus, uint16_t device,
 
     close(fd);
     return err;
+}
+
+int
+pci_rescan(uint16_t domain, uint8_t bus, uint8_t slot, uint8_t function)
+{
+    char const                      *node;
+    char                            node_buf[256];
+    int                             node_fd;
+    ssize_t                         cnt;
+
+    if ((domain | bus | slot | function) == 0)
+    {
+        /* rescan the entire PCI tree */
+        node = SYS_BUS_PCI_RESCAN;
+    }
+    else
+    {
+        snprintf(node_buf, sizeof(node_buf) - 1, SYSFS_PCI_BRIDGE_RESCAN_FMT,
+                domain, bus, slot, function);
+        node = node_buf;
+    }
+
+    node_fd = open(node, O_WRONLY);
+
+    if (node_fd < 0)
+    {
+        return errno;
+    }
+
+    cnt = write(node_fd, SYSFS_RESCAN_STRING, SYSFS_RESCAN_STRING_SIZE);
+
+    close(node_fd);
+
+    return cnt == SYSFS_RESCAN_STRING_SIZE ? 0 : EIO;
 }
 
 #endif /* defined(NV_LINUX) */

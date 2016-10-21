@@ -36,6 +36,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 #include "nvidia-modprobe-utils.h"
 #include "pci-enum.h"
@@ -218,6 +219,24 @@ static int is_kernel_module_loaded(const char *nv_module_name)
     return module_loaded;
 }
 
+/*
+ * Attempt to redirect STDOUT and STDERR to /dev/null.
+ *
+ * This is only for the cosmetics of silencing warnings, so do not
+ * treat any errors here as fatal.
+ */
+static void silence_current_process(void)
+{
+    int dev_null_fd = open("/dev/null", O_RDWR);
+    if (dev_null_fd < 0)
+    {
+        return;
+    }
+
+    dup2(dev_null_fd, STDOUT_FILENO);
+    dup2(dev_null_fd, STDERR_FILENO);
+    close(dev_null_fd);
+}
 
 /*
  * Attempt to load a kernel module; returns 1 if kernel module is
@@ -343,6 +362,17 @@ static int modprobe_helper(const int print_errors, const char *module_name)
     switch (pid = fork())
     {
         case 0:
+
+            /*
+             * modprobe might complain in expected scenarios.  E.g.,
+             * `modprobe nvidia` on a Tegra system with dGPU where no nvidia.ko is
+             * present will complain:
+             *
+             *  "modprobe: FATAL: Module nvidia not found."
+             *
+             * Silence the current process to avoid such unwanted messages.
+             */
+            silence_current_process();
 
             execle(modprobe_path, "modprobe",
                    module_name, NULL, envp);
