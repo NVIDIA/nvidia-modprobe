@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
     {
         /* Load the Unified Memory kernel module */
 
-        ret = nvidia_uvm_modprobe(0);
+        ret = nvidia_uvm_modprobe();
         if (!ret)
         {
             goto done;

@@ -692,9 +692,9 @@ int nvidia_uvm_mknod(int base_minor)
 /*
  * Attempt to load the NVIDIA Unified Memory kernel module
  */
-int nvidia_uvm_modprobe(const int print_errors)
+int nvidia_uvm_modprobe(void)
 {
-    return modprobe_helper(print_errors, NV_UVM_MODULE_NAME);
+    return modprobe_helper(0, NV_UVM_MODULE_NAME);
 }
 
 
