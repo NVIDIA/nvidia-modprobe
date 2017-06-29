@@ -58,6 +58,7 @@
 int nvidia_modprobe(const int print_errors, int module_instance);
 int nvidia_mknod(int minor, int module_instance);
 int nvidia_uvm_modprobe(void);
+#define nvidia_uvm_modprobe(print_errors) nvidia_uvm_modprobe()
 int nvidia_uvm_mknod(int base_minor);
 int nvidia_modeset_modprobe(void);
 int nvidia_modeset_mknod(void);
