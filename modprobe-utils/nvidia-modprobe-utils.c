@@ -62,6 +62,9 @@
 
 #define NV_MODESET_MODULE_NAME "nvidia-modeset"
 
+#define NV_NVLINK_MODULE_NAME "nvidia-nvlink"
+#define NV_NVLINK_PROC_PERM_PATH "/proc/driver/nvidia-nvlink/permissions"
+
 #define NV_DEVICE_FILE_MODE_MASK (S_IRWXU|S_IRWXG|S_IRWXO)
 #define NV_DEVICE_FILE_MODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)
 #define NV_DEVICE_FILE_UID 0
@@ -484,8 +487,8 @@ static void init_device_file_parameters(uid_t *uid, gid_t *gid, mode_t *mode,
  * permissions.  Returns 1 if the file is successfully created; returns 0
  * if the file could not be created.
  */
-static int mknod_helper(int major, int minor, const char *path,
-                        const char *proc_path)
+int mknod_helper(int major, int minor, const char *path,
+                 const char *proc_path)
 {
     dev_t dev = NV_MAKE_DEVICE(major, minor);
     mode_t mode;
@@ -602,7 +605,7 @@ int nvidia_mknod(int minor, int module_instance)
  * device with the specified name.  Returns the major number on success,
  * or -1 on failure.
  */
-static int get_chardev_major(const char *name)
+int get_chardev_major(const char *name)
 {
     int ret = -1;
     char line[NV_MAX_LINE_LENGTH];
@@ -719,6 +722,24 @@ int nvidia_modeset_mknod(void)
     return mknod_helper(NV_MAJOR_DEVICE_NUMBER,
                         NV_MODESET_MINOR_DEVICE_NUM,
                         NV_MODESET_DEVICE_NAME, proc_path);
+}
+
+/*
+ * Attempt to create the NVIDIA NVLink driver device file.
+ */
+int nvidia_nvlink_mknod(void)
+{
+    int major = get_chardev_major(NV_NVLINK_MODULE_NAME);
+
+    if (major < 0)
+    {
+        return 0;
+    }
+
+    return mknod_helper(major,
+                        0,
+                        NV_NVLINK_DEVICE_NAME,
+                        NV_NVLINK_PROC_PERM_PATH);
 }
 
 #endif /* NV_LINUX */

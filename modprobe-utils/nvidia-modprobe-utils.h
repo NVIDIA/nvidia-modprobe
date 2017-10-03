@@ -42,6 +42,7 @@
 #define NV_DEVICE_FILE_PATH "/dev/nvidia%d"
 #define NV_CTRL_DEVICE_FILE_PATH "/dev/nvidiactl"
 #define NV_MODESET_DEVICE_NAME "/dev/nvidia-modeset"
+#define NV_NVLINK_DEVICE_NAME "/dev/nvidia-nvlink"
 
 #define NV_NMODULE_CTRL_DEVICE_FILE_PATH "/dev/nvidiactl%d"
 
@@ -58,10 +59,13 @@
 int nvidia_modprobe(const int print_errors, int module_instance);
 int nvidia_mknod(int minor, int module_instance);
 int nvidia_uvm_modprobe(void);
-#define nvidia_uvm_modprobe(print_errors) nvidia_uvm_modprobe()
 int nvidia_uvm_mknod(int base_minor);
 int nvidia_modeset_modprobe(void);
 int nvidia_modeset_mknod(void);
+int nvidia_nvlink_mknod(void);
+
+int mknod_helper(int major, int minor, const char *path, const char *proc_path);
+int get_chardev_major(const char *name);
 
 #endif /* NV_LINUX */
 
