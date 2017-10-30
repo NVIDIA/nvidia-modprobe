@@ -54,6 +54,10 @@
     ((x <= NV_FRONTEND_CONTROL_DEVICE_MINOR_MAX) && \
      (x > NV_FRONTEND_CONTROL_DEVICE_MINOR_MIN))
 
+#define NV_INSTANCE_TO_CTL_DEV_MINOR_NUM(module_instance_no)                \
+    ((module_instance_no != NV_MODULE_INSTANCE_NONE) ?                      \
+     (NV_CTL_DEVICE_NUM - module_instance_no) : (NV_CTL_DEVICE_NUM))
+
 #if defined(NV_LINUX)
 
 int nvidia_modprobe(const int print_errors, int module_instance);
