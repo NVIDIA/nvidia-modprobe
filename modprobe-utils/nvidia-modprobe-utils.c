@@ -62,6 +62,8 @@
 
 #define NV_MODESET_MODULE_NAME "nvidia-modeset"
 
+#define NV_VGPU_VFIO_MODULE_NAME "nvidia-vgpu-vfio"
+
 #define NV_NVLINK_MODULE_NAME "nvidia-nvlink"
 #define NV_NVLINK_PROC_PERM_PATH "/proc/driver/nvidia-nvlink/permissions"
 
@@ -480,6 +482,65 @@ static void init_device_file_parameters(uid_t *uid, gid_t *gid, mode_t *mode,
     fclose(fp);
 }
 
+/* 
+ * A helper to query device file states.
+ */
+static int get_file_state_helper(
+    const char *path,
+    int major,
+    int minor,
+    const char *proc_path,
+    uid_t uid,
+    gid_t gid,
+    mode_t mode)
+{
+    dev_t dev = NV_MAKE_DEVICE(major, minor);
+    struct stat stat_buf;
+    int ret;
+    int state = 0;
+
+    ret = stat(path, &stat_buf);
+    if (ret == 0)
+    {
+        nvidia_update_file_state(&state, NvDeviceFileStateFileExists);
+
+        if (S_ISCHR(stat_buf.st_mode) && (stat_buf.st_rdev == dev))
+        {
+            nvidia_update_file_state(&state, NvDeviceFileStateChrDevOk);
+        }
+
+        if (((stat_buf.st_mode & NV_DEVICE_FILE_MODE_MASK) == mode) &&
+            (stat_buf.st_uid == uid) &&
+            (stat_buf.st_gid == gid))
+        {
+            nvidia_update_file_state(&state, NvDeviceFileStatePermissionsOk);
+        }
+    }
+
+    return state;
+}
+
+int nvidia_get_file_state(int minor, int module_instance)
+{
+    char path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    char proc_path[NV_MAX_PROC_REGISTRY_PATH_SIZE];
+    mode_t mode;
+    uid_t uid;
+    gid_t gid;
+    int modification_allowed;
+    int state = 0;
+
+    assign_device_file_name(path, minor, module_instance);
+    assign_proc_registry_path(proc_path, module_instance);
+
+    init_device_file_parameters(&uid, &gid, &mode, &modification_allowed,
+                                proc_path);
+
+    state = get_file_state_helper(path, NV_MAJOR_DEVICE_NUMBER, minor,
+                                  proc_path, uid, gid, mode);
+
+    return state;
+}
 
 /*
  * Attempt to create the specified device file with the specified major
@@ -496,7 +557,7 @@ int mknod_helper(int major, int minor, const char *path,
     gid_t gid;
     int modification_allowed;
     int ret;
-    struct stat stat_buf;
+    int state;
     int do_mknod;
 
     if (path == NULL || path[0] == '\0')
@@ -514,18 +575,12 @@ int mknod_helper(int major, int minor, const char *path,
         return 1;
     }
 
-    /*
-     * If the device file already exists with correct properties,
-     * nothing to do: success.
-     */
-    ret = stat(path, &stat_buf);
+    state = get_file_state_helper(path, major, minor,
+                                  proc_path, uid, gid, mode);
 
-    if ((ret == 0) &&
-        (S_ISCHR(stat_buf.st_mode)) &&
-        (stat_buf.st_rdev == dev) &&
-        ((stat_buf.st_mode & NV_DEVICE_FILE_MODE_MASK) == mode) &&
-        (stat_buf.st_uid == uid) &&
-        (stat_buf.st_gid == gid))
+    if (nvidia_test_file_state(state, NvDeviceFileStateFileExists) &&
+        nvidia_test_file_state(state, NvDeviceFileStateChrDevOk) &&
+        nvidia_test_file_state(state, NvDeviceFileStatePermissionsOk))
     {
         return 1;
     }
@@ -534,19 +589,18 @@ int mknod_helper(int major, int minor, const char *path,
 
     do_mknod = 0;
 
-    if (ret != 0)
+    if (!nvidia_test_file_state(state, NvDeviceFileStateFileExists))
     {
         do_mknod = 1;
     }
 
     /*
-     * If the stat(2) above succeeded but the file is either not a
-     * character device or has the wrong major/minor character device
-     * number, then we need to delete it and recreate it.
+     * If the file exists but the file is either not a character device or has
+     * the wrong major/minor character device number, then we need to delete it
+     * and recreate it.
      */
-    if ((ret == 0) &&
-        (!S_ISCHR(stat_buf.st_mode) ||
-         (stat_buf.st_rdev != dev)))
+    if (!do_mknod &&
+        !nvidia_test_file_state(state, NvDeviceFileStateChrDevOk))
     {
         ret = remove(path);
         if (ret != 0)
@@ -717,7 +771,7 @@ int nvidia_modeset_mknod(void)
 {
     char proc_path[NV_MAX_PROC_REGISTRY_PATH_SIZE];
 
-    assign_proc_registry_path(proc_path, 0);
+    assign_proc_registry_path(proc_path, NV_MODULE_INSTANCE_NONE);
 
     return mknod_helper(NV_MAJOR_DEVICE_NUMBER,
                         NV_MODESET_MINOR_DEVICE_NUM,
@@ -740,6 +794,27 @@ int nvidia_nvlink_mknod(void)
                         0,
                         NV_NVLINK_DEVICE_NAME,
                         NV_NVLINK_PROC_PERM_PATH);
+}
+
+int nvidia_vgpu_vfio_mknod(int minor_num)
+{
+    int major = get_chardev_major(NV_VGPU_VFIO_MODULE_NAME);
+    char vgpu_dev_name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    char proc_path[NV_MAX_PROC_REGISTRY_PATH_SIZE];
+
+    if (major < 0)
+    {
+        return 0;
+    }
+
+    assign_proc_registry_path(proc_path, NV_MODULE_INSTANCE_NONE);
+
+    snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+             NV_VGPU_VFIO_DEVICE_NAME, minor_num);
+
+    vgpu_dev_name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN - 1] = '\0';
+
+    return mknod_helper(major, minor_num, vgpu_dev_name, proc_path);
 }
 
 #endif /* NV_LINUX */

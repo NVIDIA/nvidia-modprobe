@@ -42,6 +42,7 @@
 #define NV_DEVICE_FILE_PATH "/dev/nvidia%d"
 #define NV_CTRL_DEVICE_FILE_PATH "/dev/nvidiactl"
 #define NV_MODESET_DEVICE_NAME "/dev/nvidia-modeset"
+#define NV_VGPU_VFIO_DEVICE_NAME "/dev/nvidia-vgpu%d"
 #define NV_NVLINK_DEVICE_NAME "/dev/nvidia-nvlink"
 
 #define NV_NMODULE_CTRL_DEVICE_FILE_PATH "/dev/nvidiactl%d"
@@ -54,25 +55,41 @@
     ((x <= NV_FRONTEND_CONTROL_DEVICE_MINOR_MAX) && \
      (x > NV_FRONTEND_CONTROL_DEVICE_MINOR_MIN))
 
-#define NV_INSTANCE_TO_CTL_DEV_MINOR_NUM(module_instance_no)                \
-    ((module_instance_no != NV_MODULE_INSTANCE_NONE) ?                      \
-     (NV_CTL_DEVICE_NUM - module_instance_no) : (NV_CTL_DEVICE_NUM))
-
 #if defined(NV_LINUX)
 
+typedef enum
+{
+    NvDeviceFileStateFileExists = 0,
+    NvDeviceFileStateChrDevOk,
+    NvDeviceFileStatePermissionsOk
+} NvDeviceFileState;
+
+static __inline__ void nvidia_update_file_state(int *state,
+                                                NvDeviceFileState value)
+{
+    *state |= (1 << value);
+}
+
+static __inline__ int nvidia_test_file_state(int state,
+                                             NvDeviceFileState value)
+{
+    return !!(state & (1 << value));
+}
+
+int nvidia_get_file_state(int minor, int module_instance);
 int nvidia_modprobe(const int print_errors, int module_instance);
 int nvidia_mknod(int minor, int module_instance);
 int nvidia_uvm_modprobe(void);
 int nvidia_uvm_mknod(int base_minor);
 int nvidia_modeset_modprobe(void);
 int nvidia_modeset_mknod(void);
+int nvidia_vgpu_vfio_mknod(int minor_num);
 int nvidia_nvlink_mknod(void);
 
 int mknod_helper(int major, int minor, const char *path, const char *proc_path);
 int get_chardev_major(const char *name);
 
 #endif /* NV_LINUX */
-
 
 /*
  * Detect use of multiple kernel module instances. Use a single 
