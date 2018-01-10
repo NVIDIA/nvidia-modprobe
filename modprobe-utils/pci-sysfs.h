@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, NVIDIA CORPORATION.
+ * Copyright (c) 2016-2017, NVIDIA CORPORATION.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -28,6 +28,51 @@
 #ifndef __PCI_SYSFS_H__
 #define __PCI_SYSFS_H__
 
+#if defined(NV_LINUX)
+
+#include <linux/pci.h>
+
+#if !defined(PCI_STD_HEADER_SIZEOF)
+#define PCI_STD_HEADER_SIZEOF   64
+#endif
+#if !defined(PCI_CAP_ID_EXP)
+#define  PCI_CAP_ID_EXP         0x10    /* PCI Express */
+#endif
+#if !defined(PCI_EXP_LNKCTL)
+#define PCI_EXP_LNKCTL          16      /* Link Control */
+#endif
+#if !defined(PCI_EXP_LNKCTL_LD)
+#define  PCI_EXP_LNKCTL_LD      0x0010  /* Link Disable */
+#endif
+#if !defined(PCI_EXP_LNKSTA)
+#define PCI_EXP_LNKSTA          18      /* Link Status */
+#endif
+#if !defined(PCI_EXP_LNKSTA_DLLLA)
+#define  PCI_EXP_LNKSTA_DLLLA   0x2000  /* Data Link Layer Link Active */
+#endif
+
+#define PCI_LINK_WAIT_US    200000      /* 200 ms, must be less than 1000000 (1s) */
+#define PCI_LINK_DELAY_NS   100000000   /* 100 ms */
+
+#if (_POSIX_C_SOURCE >= 199309L)
+#define PCI_NANOSLEEP(ts, rem)  nanosleep(ts, rem)
+#elif !(_POSIX_C_SOURCE >= 200809L)
+#define PCI_NANOSLEEP(ts, rem)  usleep((ts)->tv_sec * 1000000 + ((ts)->tv_nsec + 999) / 1000)
+#else
+#define PCI_NANOSLEEP(ts, rem)  sleep((ts)->tv_sec + ((ts)->tv_nsec + 999999999) / 1000000000)
+#endif
+
+typedef struct  {
+    unsigned    domain;
+    unsigned    bus;
+    unsigned    dev;
+    unsigned    ftn;
+}   pci_info_t;
+
 int pci_rescan(uint16_t domain, uint8_t bus, uint8_t slot, uint8_t function);
+int pci_find_parent_bridge(pci_info_t *p_gpu_info, pci_info_t *p_bridge_info);
+int pci_bridge_link_set_enable(uint16_t domain, uint8_t bus, uint8_t device, uint8_t ftn, int enable);
+
+#endif /* NV_LINUX */
 
 #endif /* __PCI_SYSFS_H__ */
