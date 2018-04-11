@@ -1,7 +1,7 @@
 /*
  * (C) Copyright IBM Corporation 2006
  *
- * Copyright (c) 2014 NVIDIA Corporation
+ * Copyright (c) 2014-2018 NVIDIA Corporation
  *
  * All Rights Reserved.
  *
@@ -51,6 +51,9 @@
 #include <sys/mman.h>
 #include <dirent.h>
 #include <errno.h>
+#include <sys/time.h>
+#include <time.h>
+#include <limits.h>
 
 #include "pci-enum.h"
 #include "pci-sysfs.h"
@@ -58,11 +61,23 @@
 #define SYS_BUS_PCI                     "/sys/bus/pci/"
 #define SYS_BUS_PCI_DEVICES SYS_BUS_PCI "devices"
 #define SYS_BUS_PCI_RESCAN  SYS_BUS_PCI "rescan"
-#define SYSFS_PCI_BRIDGE_RESCAN_FMT     SYS_BUS_PCI_DEVICES "/%04x:%02x:%02x.%1x/rescan"
+#define PCI_DBDF_FORMAT                 "%04x:%02x:%02x.%1u"
+#define SYSFS_PCI_BRIDGE_RESCAN_FMT     SYS_BUS_PCI_DEVICES "/" PCI_DBDF_FORMAT "/rescan"
 #define SYSFS_RESCAN_STRING             "1\n"
 #define SYSFS_RESCAN_STRING_SIZE        2
+#define PCI_CAP_TTL_MAX                 20
+#define SYSFS_PATH_SIZE                 256
 
-static int pci_sysfs_read_cfg(uint16_t, uint16_t, uint16_t, uint16_t, void *,
+#define BAIL_ON_IO_ERR(buf, err, cnt, action)   \
+do  {                                           \
+    if (((err) != 0) || ((cnt) < sizeof(buf)))  \
+    {                                           \
+        (err) = ((err) == 0) ? EIO : (err);     \
+        action;                                 \
+    }                                           \
+} while (0)
+
+static int pci_sysfs_read_cfg(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, void *,
                               uint16_t size, uint16_t *);
 
 static int find_matches(struct pci_id_match *match);
@@ -128,10 +143,10 @@ find_matches(struct pci_id_match *match)
             continue;
         }
 
-        sscanf(d->d_name, "%04x:%02x:%02x.%1u",
+        sscanf(d->d_name, PCI_DBDF_FORMAT,
                & dom, & bus, & dev, & func);
 
-        err = pci_sysfs_read_cfg(dom, bus, dev, func, config, 48, & bytes);
+        err = pci_sysfs_read_cfg(dom, bus, dev, func, 0, config, 48, & bytes);
         if ((bytes == 48) && !err)
         {
             vendor_id = (uint16_t)config[0] + ((uint16_t)config[1] << 8);
@@ -170,10 +185,10 @@ find_matches(struct pci_id_match *match)
 
 static int
 pci_sysfs_read_cfg(uint16_t domain, uint16_t bus, uint16_t device,
-                   uint16_t function, void * data, uint16_t size,
-                   uint16_t *bytes_read)
+                   uint16_t function, uint16_t off, void *data,
+                   uint16_t size, uint16_t *bytes_read)
 {
-    char name[256];
+    char name[SYSFS_PATH_SIZE];
     uint16_t temp_size = size;
     int err = 0;
     int fd;
@@ -190,13 +205,22 @@ pci_sysfs_read_cfg(uint16_t domain, uint16_t bus, uint16_t device,
      * space.  It is used here to obtain most of the information about the
      * device.
      */
-    snprintf(name, 255, "%s/%04x:%02x:%02x.%1u/config",
+    snprintf(name, SYSFS_PATH_SIZE - 1, "%s/" PCI_DBDF_FORMAT "/config",
              SYS_BUS_PCI_DEVICES, domain, bus, device, function);
 
     fd = open(name, O_RDONLY);
     if (fd < 0)
     {
         return errno;
+    }
+
+    if (off != 0)
+    {
+        if (lseek(fd, (off_t) off, SEEK_SET) < 0)
+        {
+            close(fd);
+            return errno;
+        }
     }
 
     while (temp_size > 0)
@@ -226,11 +250,81 @@ pci_sysfs_read_cfg(uint16_t domain, uint16_t bus, uint16_t device,
     return err;
 }
 
+static int
+pci_sysfs_write_cfg(uint16_t domain, uint16_t bus, uint16_t device,
+                   uint16_t function, uint16_t off, void *data,
+                   uint16_t size, uint16_t *bytes_written)
+{
+    char name[SYSFS_PATH_SIZE];
+    uint16_t temp_size = size;
+    int err = 0;
+    int fd;
+    char *data_bytes = data;
+
+    if (bytes_written != NULL)
+    {
+        *bytes_written = 0;
+    }
+
+    /*
+     * Each device has a directory under sysfs.  Within that directory there
+     * is a file named "config".  This file used to access the PCI config
+     * space.
+     */
+    snprintf(name, SYSFS_PATH_SIZE - 1, "%s/" PCI_DBDF_FORMAT "/config",
+             SYS_BUS_PCI_DEVICES, domain, bus, device, function);
+
+    fd = open(name, O_WRONLY);
+    if (fd < 0)
+    {
+        return errno;
+    }
+
+    if (off != 0)
+    {
+        if (lseek(fd, (off_t) off, SEEK_SET) < 0)
+        {
+            close(fd);
+            return errno;
+        }
+    }
+
+    while (temp_size > 0)
+    {
+        const ssize_t bytes = write(fd, data_bytes, temp_size);
+
+        if (bytes < 0)
+        {
+            err = errno;
+            break;
+        }
+        /*
+         * If zero bytes were written, then we assume it's the end of the
+         * config file.
+         */
+        if (bytes == 0)
+        {
+            break;
+        }
+
+        temp_size -= bytes;
+        data_bytes += bytes;
+    }
+    
+    if (bytes_written != NULL)
+    {
+        *bytes_written = size - temp_size;
+    }
+
+    close(fd);
+    return err;
+}
+
 int
 pci_rescan(uint16_t domain, uint8_t bus, uint8_t slot, uint8_t function)
 {
     char const                      *node;
-    char                            node_buf[256];
+    char                            node_buf[SYSFS_PATH_SIZE];
     int                             node_fd;
     ssize_t                         cnt;
 
@@ -258,6 +352,178 @@ pci_rescan(uint16_t domain, uint8_t bus, uint8_t slot, uint8_t function)
     close(node_fd);
 
     return cnt == SYSFS_RESCAN_STRING_SIZE ? 0 : EIO;
+}
+
+int
+pci_find_parent_bridge(pci_info_t *p_gpu_info, pci_info_t *p_bridge_info)
+{
+    char    gpu_path[SYSFS_PATH_SIZE];
+    char    bridge_path[PATH_MAX];
+    char    *p_node;
+
+    snprintf(gpu_path, SYSFS_PATH_SIZE - 1, "%s/" PCI_DBDF_FORMAT "/..", SYS_BUS_PCI_DEVICES,
+            p_gpu_info->domain, p_gpu_info->bus,
+            p_gpu_info->dev, p_gpu_info->ftn);
+
+    if (realpath(gpu_path, bridge_path) == NULL)
+    {
+        return errno;
+    }
+
+    p_node = strrchr(bridge_path, '/');
+
+    if (p_node == NULL)
+    {
+        return ENOENT;
+    }
+
+    ++p_node;
+
+    if (sscanf(p_node, PCI_DBDF_FORMAT,
+                &p_bridge_info->domain, &p_bridge_info->bus,
+                &p_bridge_info->dev, &p_bridge_info->ftn) != 4)
+    {
+        return ENOENT;
+    }
+
+    return 0;
+}
+
+static int
+pci_find_pcie_caps(uint16_t domain, uint8_t bus, uint8_t device, uint8_t ftn, uint8_t *p_caps)
+{
+    unsigned    ttl;
+    uint8_t     off;
+    uint8_t     cap_id;
+    int         err = ENXIO;
+    uint16_t    cnt;
+
+    for (off = PCI_CAPABILITY_LIST, ttl = PCI_CAP_TTL_MAX; ttl; --ttl)
+    {
+        err = pci_sysfs_read_cfg(domain, bus, device, ftn, off,
+                                &off, sizeof(off), &cnt);
+        BAIL_ON_IO_ERR(off, err, cnt, break);
+
+        /* Capabilities must reside above the std config header */
+        if ((off < PCI_STD_HEADER_SIZEOF) || (off == 0xff))
+        {
+            break;
+        }
+
+        /* Clear the reserved bits */
+        off &= ~3;
+
+        err = pci_sysfs_read_cfg(domain, bus, device, ftn, off + PCI_CAP_LIST_ID,
+                                &cap_id, sizeof(cap_id), &cnt);
+        BAIL_ON_IO_ERR(cap_id, err, cnt, break);
+
+        if (cap_id == PCI_CAP_ID_EXP)
+        {
+            goto found;
+        }
+
+        if (cap_id == 0xff)
+        {
+            break;
+        }
+
+        off += PCI_CAP_LIST_NEXT;
+    }
+    return err;
+found:
+    *p_caps = off;
+    return 0;
+}
+
+int
+pci_bridge_link_set_enable(uint16_t domain, uint8_t bus, uint8_t device, uint8_t ftn, int enable)
+{
+    uint8_t         pcie_caps = 0;
+    uint16_t        reg;
+    uint32_t        cap_reg;
+    uint16_t        cnt;
+    int             err;
+    struct timeval  start;
+    struct timeval  curr;
+    struct timeval  diff;
+    struct timespec delay = {0, PCI_LINK_DELAY_NS};
+    struct timespec dlllar_disable_delay = {0, PCI_LINK_DLLLAR_DISABLE_DELAY_NS};
+
+    err = pci_find_pcie_caps(domain, bus, device, ftn, &pcie_caps);
+
+    if (err != 0)
+    {
+        return err;
+    }
+
+    err = pci_sysfs_read_cfg(domain, bus, device, ftn, pcie_caps + PCI_EXP_LNKCTL,
+                            &reg, sizeof(reg), &cnt);
+    BAIL_ON_IO_ERR(reg, err, cnt, return err);
+
+    if (enable)
+    {
+        reg &= ~PCI_EXP_LNKCTL_LD;
+    }
+    else
+    {
+        reg |= PCI_EXP_LNKCTL_LD;
+    }
+
+    err = pci_sysfs_write_cfg(domain, bus, device, ftn, pcie_caps + PCI_EXP_LNKCTL,
+                            &reg, sizeof(reg), &cnt);
+    BAIL_ON_IO_ERR(reg, err, cnt, return err);
+
+    if (enable)
+    {
+        /*
+         * Data Link Layer Link Active Reporting must be capable for
+         * zero power capable downstream port. But old controller might
+         * not implement it. In this case, we wait for 30 ms.
+         */
+        err = pci_sysfs_read_cfg(domain, bus, device, ftn, pcie_caps + PCI_EXP_LNKCAP,
+                                &cap_reg, sizeof(cap_reg), &cnt);
+        BAIL_ON_IO_ERR(cap_reg, err, cnt, return err);
+
+        if (cap_reg & PCI_EXP_LNKCAP_DLLLARC)
+        {
+            /* wait for the link to go up and then sleep for 100 ms */
+
+            gettimeofday(&start, NULL);
+
+            for (;;)
+            {
+                err = pci_sysfs_read_cfg(domain, bus, device, ftn, pcie_caps + PCI_EXP_LNKSTA,
+                                    &reg, sizeof(reg), &cnt);
+                BAIL_ON_IO_ERR(reg, err, cnt, return err);
+
+                if ((reg & PCI_EXP_LNKSTA_DLLLA) != 0)
+                {
+                    break;
+                }
+
+                gettimeofday(&curr, NULL);
+                timersub(&curr, &start, &diff);
+
+                if ((diff.tv_sec > 0) || (diff.tv_usec >= PCI_LINK_WAIT_US))
+                {
+                    return ETIME;
+                }
+            }
+        }
+        else
+        {
+            /*
+             * Measured the time on DGX1 for link to become established in a bridge,
+             * where the DLLLA reporting is supported and its approximately ~9ms,
+             * so wait for 30ms where DLLLA reporting is not supported.
+             */
+            PCI_NANOSLEEP(&dlllar_disable_delay, NULL);
+        }
+
+        PCI_NANOSLEEP(&delay, NULL);
+    }
+
+    return err;
 }
 
 #endif /* defined(NV_LINUX) */
