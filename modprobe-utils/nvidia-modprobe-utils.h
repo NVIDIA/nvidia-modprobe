@@ -36,6 +36,7 @@
 #define NV_MAX_MODULE_INSTANCES              8
 #define NV_CTL_DEVICE_NUM                    255
 #define NV_MODESET_MINOR_DEVICE_NUM          254
+#define NV_NVSWITCH_CTL_MINOR                255
 
 #define NV_FRONTEND_CONTROL_DEVICE_MINOR_MAX NV_CTL_DEVICE_NUM
 
@@ -44,6 +45,8 @@
 #define NV_MODESET_DEVICE_NAME "/dev/nvidia-modeset"
 #define NV_VGPU_VFIO_DEVICE_NAME "/dev/nvidia-vgpu%d"
 #define NV_NVLINK_DEVICE_NAME "/dev/nvidia-nvlink"
+#define NV_NVSWITCH_CTL_NAME "/dev/nvidia-nvswitchctl"
+#define NV_NVSWITCH_DEVICE_NAME "/dev/nvidia-nvswitch%d"
 
 #define NV_NMODULE_CTRL_DEVICE_FILE_PATH "/dev/nvidiactl%d"
 
@@ -85,9 +88,7 @@ int nvidia_modeset_modprobe(void);
 int nvidia_modeset_mknod(void);
 int nvidia_vgpu_vfio_mknod(int minor_num);
 int nvidia_nvlink_mknod(void);
-
-int mknod_helper(int major, int minor, const char *path, const char *proc_path);
-int get_chardev_major(const char *name);
+int nvidia_nvswitch_mknod(int minor);
 
 #endif /* NV_LINUX */
 

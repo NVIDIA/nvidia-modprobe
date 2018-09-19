@@ -44,13 +44,10 @@
 #include "common-utils.h"
 #include "msg.h"
 
-extern const char *pNV_ID;
-
-
 static void print_version(void)
 {
     nv_info_msg(NULL, "");
-    nv_info_msg(NULL, "%s", pNV_ID);
+    nv_info_msg(NULL, "%s", NV_ID_STRING);
     nv_info_msg(NULL, "");
 }
 

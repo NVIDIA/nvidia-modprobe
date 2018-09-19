@@ -67,6 +67,9 @@
 #define NV_NVLINK_MODULE_NAME "nvidia-nvlink"
 #define NV_NVLINK_PROC_PERM_PATH "/proc/driver/nvidia-nvlink/permissions"
 
+#define NV_NVSWITCH_MODULE_NAME "nvidia-nvswitch"
+#define NV_NVSWITCH_PROC_PERM_PATH "/proc/driver/nvidia-nvswitch/permissions"
+
 #define NV_DEVICE_FILE_MODE_MASK (S_IRWXU|S_IRWXG|S_IRWXO)
 #define NV_DEVICE_FILE_MODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)
 #define NV_DEVICE_FILE_UID 0
@@ -396,18 +399,20 @@ static int modprobe_helper(const int print_errors, const char *module_name)
             return 0;
 
         default:
-            if (waitpid(pid, &status, 0) < 0)
-            {
-                return 0;
-            }
-            if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
-            {
-                return 1;
-            }
-            else
-            {
-                return 0;
-            }
+            /*
+             * waitpid(2) is not always guaranteed to return success even if
+             * the child terminated normally.  For example, if the process
+             * explicitly configured the handling of the SIGCHLD signal
+             * to SIG_IGN, then waitpid(2) will instead block until all
+             * children terminate and return the error ECHILD, regardless
+             * of the child's exit codes.
+             *
+             * Hence, ignore waitpid(2) error codes and instead check
+             * whether the desired kernel module is loaded.
+             */
+            waitpid(pid, NULL, 0);
+
+            return is_kernel_module_loaded(module_name);
     }
 
     return 1;
@@ -548,8 +553,8 @@ int nvidia_get_file_state(int minor, int module_instance)
  * permissions.  Returns 1 if the file is successfully created; returns 0
  * if the file could not be created.
  */
-int mknod_helper(int major, int minor, const char *path,
-                 const char *proc_path)
+static int mknod_helper(int major, int minor, const char *path,
+                        const char *proc_path)
 {
     dev_t dev = NV_MAKE_DEVICE(major, minor);
     mode_t mode;
@@ -659,7 +664,7 @@ int nvidia_mknod(int minor, int module_instance)
  * device with the specified name.  Returns the major number on success,
  * or -1 on failure.
  */
-int get_chardev_major(const char *name)
+static int get_chardev_major(const char *name)
 {
     int ret = -1;
     char line[NV_MAX_LINE_LENGTH];
@@ -796,11 +801,47 @@ int nvidia_nvlink_mknod(void)
                         NV_NVLINK_PROC_PERM_PATH);
 }
 
+/*
+ * Attempt to create the NVIDIA NVSwitch driver device files.
+ */
+int nvidia_nvswitch_mknod(int minor)
+{
+    int major = 0;
+    char name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    int ret;
+
+    major = get_chardev_major(NV_NVSWITCH_MODULE_NAME);
+
+    if (major < 0)
+    {
+        return 0;
+    }
+
+    if (minor == NV_NVSWITCH_CTL_MINOR)
+    {
+        ret = snprintf(name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                       NV_NVSWITCH_CTL_NAME);
+    }
+    else
+    {
+        ret = snprintf(name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                       NV_NVSWITCH_DEVICE_NAME, minor);
+    }
+
+    if (ret <= 0)
+    {
+        return 0;
+    }
+
+    return mknod_helper(major, minor, name, NV_NVSWITCH_PROC_PERM_PATH);
+}
+
 int nvidia_vgpu_vfio_mknod(int minor_num)
 {
     int major = get_chardev_major(NV_VGPU_VFIO_MODULE_NAME);
     char vgpu_dev_name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
     char proc_path[NV_MAX_PROC_REGISTRY_PATH_SIZE];
+    int ret;
 
     if (major < 0)
     {
@@ -809,8 +850,12 @@ int nvidia_vgpu_vfio_mknod(int minor_num)
 
     assign_proc_registry_path(proc_path, NV_MODULE_INSTANCE_NONE);
 
-    snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
-             NV_VGPU_VFIO_DEVICE_NAME, minor_num);
+    ret = snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                   NV_VGPU_VFIO_DEVICE_NAME, minor_num);
+    if (ret <= 0)
+    {
+        return 0;
+    }
 
     vgpu_dev_name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN - 1] = '\0';
 
