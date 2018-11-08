@@ -76,9 +76,9 @@ typedef struct  {
     unsigned    ftn;
 }   pci_info_t;
 
-int pci_rescan(uint16_t domain, uint8_t bus, uint8_t slot, uint8_t function);
+int pci_rescan(uint32_t domain, uint8_t bus, uint8_t slot, uint8_t function);
 int pci_find_parent_bridge(pci_info_t *p_gpu_info, pci_info_t *p_bridge_info);
-int pci_bridge_link_set_enable(uint16_t domain, uint8_t bus, uint8_t device, uint8_t ftn, int enable);
+int pci_bridge_link_set_enable(uint32_t domain, uint8_t bus, uint8_t device, uint8_t ftn, int enable);
 
 #endif /* NV_LINUX */
 

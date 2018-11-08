@@ -77,7 +77,7 @@ do  {                                           \
     }                                           \
 } while (0)
 
-static int pci_sysfs_read_cfg(uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, void *,
+static int pci_sysfs_read_cfg(uint32_t, uint16_t, uint16_t, uint16_t, uint16_t, void *,
                               uint16_t size, uint16_t *);
 
 static int find_matches(struct pci_id_match *match);
@@ -184,7 +184,7 @@ find_matches(struct pci_id_match *match)
 }
 
 static int
-pci_sysfs_read_cfg(uint16_t domain, uint16_t bus, uint16_t device,
+pci_sysfs_read_cfg(uint32_t domain, uint16_t bus, uint16_t device,
                    uint16_t function, uint16_t off, void *data,
                    uint16_t size, uint16_t *bytes_read)
 {
@@ -251,7 +251,7 @@ pci_sysfs_read_cfg(uint16_t domain, uint16_t bus, uint16_t device,
 }
 
 static int
-pci_sysfs_write_cfg(uint16_t domain, uint16_t bus, uint16_t device,
+pci_sysfs_write_cfg(uint32_t domain, uint16_t bus, uint16_t device,
                    uint16_t function, uint16_t off, void *data,
                    uint16_t size, uint16_t *bytes_written)
 {
@@ -321,7 +321,7 @@ pci_sysfs_write_cfg(uint16_t domain, uint16_t bus, uint16_t device,
 }
 
 int
-pci_rescan(uint16_t domain, uint8_t bus, uint8_t slot, uint8_t function)
+pci_rescan(uint32_t domain, uint8_t bus, uint8_t slot, uint8_t function)
 {
     char const                      *node;
     char                            node_buf[SYSFS_PATH_SIZE];
@@ -390,7 +390,7 @@ pci_find_parent_bridge(pci_info_t *p_gpu_info, pci_info_t *p_bridge_info)
 }
 
 static int
-pci_find_pcie_caps(uint16_t domain, uint8_t bus, uint8_t device, uint8_t ftn, uint8_t *p_caps)
+pci_find_pcie_caps(uint32_t domain, uint8_t bus, uint8_t device, uint8_t ftn, uint8_t *p_caps)
 {
     unsigned    ttl;
     uint8_t     off;
@@ -436,7 +436,7 @@ found:
 }
 
 int
-pci_bridge_link_set_enable(uint16_t domain, uint8_t bus, uint8_t device, uint8_t ftn, int enable)
+pci_bridge_link_set_enable(uint32_t domain, uint8_t bus, uint8_t device, uint8_t ftn, int enable)
 {
     uint8_t         pcie_caps = 0;
     uint16_t        reg;

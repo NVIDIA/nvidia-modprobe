@@ -53,7 +53,7 @@ option is specified,
 will also create the requested device file.
 
 The source code to nvidia-modprobe is available here:
-.URL ftp://download.nvidia.com/XFree86/nvidia-modprobe/
+.URL https://download.nvidia.com/XFree86/nvidia-modprobe/
 
 __OPTIONS__
 
