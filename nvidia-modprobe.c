@@ -91,7 +91,6 @@ int main(int argc, char *argv[])
     int minors[64];
     int num_minors = 0;
     int i, ret = 1;
-    int module_instance = NV_MODULE_INSTANCE_NONE;
     int uvm_modprobe = FALSE;
     int modeset = FALSE;
 
@@ -126,19 +125,6 @@ int main(int argc, char *argv[])
                 else
                 {
                     nv_error_msg("Too many NVIDIA character device files requested.");
-                    exit(1);
-                }
-                break;
-            case 'i':
-                if (intval < NV_MAX_MODULE_INSTANCES &&
-                    intval >= NV_MODULE_INSTANCE_ZERO)
-                {
-                    module_instance = intval;
-                }
-                else
-                {
-                    nv_error_msg("Module instance must be in the range from "
-                                 "0 to %d.\n", (NV_MAX_MODULE_INSTANCES-1));
                     exit(1);
                 }
                 break;
@@ -180,7 +166,7 @@ int main(int argc, char *argv[])
     {
         /* Load the kernel module. */
 
-        ret = nvidia_modprobe(0, module_instance);
+        ret = nvidia_modprobe_v2(0);
         if (!ret)
         {
             goto done;
@@ -190,7 +176,7 @@ int main(int argc, char *argv[])
 
         for (i = 0; i < num_minors; i++)
         {
-            ret = nvidia_mknod(minors[i], module_instance);
+            ret = nvidia_mknod_v2(minors[i]);
             if (!ret)
             {
                 goto done;

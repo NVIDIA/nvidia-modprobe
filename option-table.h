@@ -38,14 +38,6 @@ static const NVGetoptOption __options[] = {
       "this option can be specified multiple times to create multiple "
       "NVIDIA device files." },
 
-    { "module-instance",
-      'i',
-      NVGETOPT_INTEGER_ARGUMENT | NVGETOPT_HELP_ALWAYS,
-      "MODULE-INSTANCE",
-      "Load the required NVIDIA kernel module that corresponds to the "
-      "specified &MODULE-INSTANCE& value. The value should be between "
-      "0 and 7." },
-
     { "unified-memory",
       'u',
        0,
