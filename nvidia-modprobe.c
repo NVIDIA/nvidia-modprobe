@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
     {
         /* Load the kernel module. */
 
-        ret = nvidia_modprobe_v2(0);
+        ret = nvidia_modprobe(0);
         if (!ret)
         {
             goto done;
@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
 
         for (i = 0; i < num_minors; i++)
         {
-            ret = nvidia_mknod_v2(minors[i]);
+            ret = nvidia_mknod(minors[i]);
             if (!ret)
             {
                 goto done;

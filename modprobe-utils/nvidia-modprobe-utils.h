@@ -75,16 +75,6 @@ int nvidia_vgpu_vfio_mknod(int minor_num);
 int nvidia_nvlink_mknod(void);
 int nvidia_nvswitch_mknod(int minor);
 
-static __inline__ int nvidia_modprobe_v2(const int print_errors)
-{
-    return nvidia_modprobe(print_errors);
-}
-
-static __inline__ int nvidia_mknod_v2(int minor)
-{
-    return nvidia_mknod(minor);
-}
-
 #endif /* NV_LINUX */
 
 /*
