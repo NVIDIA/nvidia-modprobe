@@ -51,5 +51,26 @@ static const NVGetoptOption __options[] = {
        NULL,
       "Load the NVIDIA modeset kernel module and create its device file." },
 
+    { "nvswitch",
+      's',
+       0,
+       NULL,
+      "Load the NVIDIA kernel module and create the NVSwitch device files "
+      "for each minor number specified using the -c flag."},
+
+    { "nvlink",
+      'l',
+      0,
+      NULL,
+      "Load the NVIDIA kernel module and create the NVLink control device file." },
+
+    { "nvidia-capability-device-file",
+      'f',
+       NVGETOPT_STRING_ARGUMENT,
+       NULL,
+      "Create the NVIDIA capability device files with the given capability "
+      "/proc file path. This option can be specified multiple times to create "
+      "multiple NVIDIA capability device files." },
+
     { NULL, 0, 0, NULL, NULL },
 };

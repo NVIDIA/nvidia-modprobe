@@ -15,10 +15,10 @@
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -30,7 +30,7 @@
 
 /**
  * pci-enum.h
- * 
+ *
  * Based on libpciaccess/include/pciaccess.h from libpciaccess-0.12.1, which
  * can be found here:
  *
@@ -76,7 +76,7 @@ int pci_enum_match_id(struct pci_id_match *);
 struct pci_id_match {
     /**
      * Device/vendor matching controls
-     * 
+     *
      * Control the search based on the device, vendor, subdevice, or subvendor
      * IDs.  Setting any of these fields to PCI_MATCH_ANY will cause the field
      * to not be used in the comparison.
@@ -91,7 +91,7 @@ struct pci_id_match {
 
     /**
      * Device class matching controls
-     * 
+     *
      * Device's class and subclass. The class is at bits [15:8], subclass is at
      * bits [7:0].
      */

@@ -11,10 +11,10 @@
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -93,7 +93,7 @@ pci_enum_match_id(struct pci_id_match *match)
     struct stat st;
 
 
-    /* 
+    /*
      * If the directory "/sys/bus/pci/devices" exists, then the PCI subsystem
      * can be accessed using this interface.
      */
@@ -240,7 +240,7 @@ pci_sysfs_read_cfg(uint32_t domain, uint16_t bus, uint16_t device,
         temp_size -= bytes;
         data_bytes += bytes;
     }
-    
+
     if (bytes_read != NULL)
     {
         *bytes_read = size - temp_size;
@@ -310,7 +310,7 @@ pci_sysfs_write_cfg(uint32_t domain, uint16_t bus, uint16_t device,
         temp_size -= bytes;
         data_bytes += bytes;
     }
-    
+
     if (bytes_written != NULL)
     {
         *bytes_written = size - temp_size;

@@ -72,7 +72,8 @@
 #define NV_DEVICE_FILE_UID 0
 #define NV_DEVICE_FILE_GID 0
 
-#define NV_MAKE_DEVICE(x,y) ((dev_t)((x) << 8 | (y)))
+#define NV_MAKE_DEVICE(major, minor) \
+    ((dev_t)((minor & 0xff) | (major << 8) | ((minor & ~0xff) << 12)))
 
 #define NV_MAJOR_DEVICE_NUMBER 195
 
@@ -402,7 +403,7 @@ static void init_device_file_parameters(uid_t *uid, gid_t *gid, mode_t *mode,
     fclose(fp);
 }
 
-/* 
+/*
  * A helper to query device file states.
  */
 static int get_file_state_helper(
@@ -575,7 +576,7 @@ int nvidia_mknod(int minor)
  * device with the specified name.  Returns the major number on success,
  * or -1 on failure.
  */
-static int get_chardev_major(const char *name)
+int nvidia_get_chardev_major(const char *name)
 {
     int ret = -1;
     char line[NV_MAX_LINE_LENGTH];
@@ -644,13 +645,86 @@ done:
     return ret;
 }
 
+int nvidia_nvlink_get_file_state(void)
+{
+    char path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    mode_t mode;
+    uid_t uid;
+    gid_t gid;
+    int modification_allowed;
+    int ret;
+    int major = nvidia_get_chardev_major(NV_NVLINK_MODULE_NAME);
+
+    if (major < 0)
+    {
+        path[0] = '\0';
+        goto done;
+    }
+
+    ret = snprintf(path, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                   NV_NVLINK_DEVICE_NAME);
+
+    if (ret < 0 || ret >= NV_MAX_CHARACTER_DEVICE_FILE_STRLEN)
+    {
+        path[0] = '\0';
+    }
+
+done:
+
+    init_device_file_parameters(&uid, &gid, &mode, &modification_allowed,
+                                NV_NVLINK_PROC_PERM_PATH);
+
+    return get_file_state_helper(path, major, 0,
+                                 NV_NVLINK_PROC_PERM_PATH, uid, gid, mode);
+}
+
+int nvidia_nvswitch_get_file_state(int minor)
+{
+    char path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    mode_t mode;
+    uid_t uid;
+    gid_t gid;
+    int modification_allowed;
+    int ret;
+    int major = nvidia_get_chardev_major(NV_NVSWITCH_MODULE_NAME);
+
+    if ((major < 0) || (minor < 0) || (minor > NV_NVSWITCH_CTL_MINOR))
+    {
+        path[0] = '\0';
+        goto done;
+    }
+
+    if (minor == NV_NVSWITCH_CTL_MINOR)
+    {
+        ret = snprintf(path, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                       NV_NVSWITCH_CTL_NAME);
+    }
+    else
+    {
+        ret = snprintf(path, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                       NV_NVSWITCH_DEVICE_NAME, minor);
+    }
+
+    if (ret < 0 || ret >= NV_MAX_CHARACTER_DEVICE_FILE_STRLEN)
+    {
+        path[0] = '\0';
+    }
+
+done:
+
+    init_device_file_parameters(&uid, &gid, &mode, &modification_allowed,
+                                NV_NVSWITCH_PROC_PERM_PATH);
+
+    return get_file_state_helper(path, major, minor,
+                                 NV_NVSWITCH_PROC_PERM_PATH, uid, gid, mode);
+}
 
 /*
  * Attempt to create the NVIDIA Unified Memory device file
  */
 int nvidia_uvm_mknod(int base_minor)
 {
-    int major = get_chardev_major(NV_UVM_MODULE_NAME);
+    int major = nvidia_get_chardev_major(NV_UVM_MODULE_NAME);
 
     if (major < 0)
     {
@@ -695,7 +769,7 @@ int nvidia_modeset_mknod(void)
  */
 int nvidia_nvlink_mknod(void)
 {
-    int major = get_chardev_major(NV_NVLINK_MODULE_NAME);
+    int major = nvidia_get_chardev_major(NV_NVLINK_MODULE_NAME);
 
     if (major < 0)
     {
@@ -717,7 +791,7 @@ int nvidia_nvswitch_mknod(int minor)
     char name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
     int ret;
 
-    major = get_chardev_major(NV_NVSWITCH_MODULE_NAME);
+    major = nvidia_get_chardev_major(NV_NVSWITCH_MODULE_NAME);
 
     if (major < 0)
     {
@@ -735,7 +809,7 @@ int nvidia_nvswitch_mknod(int minor)
                        NV_NVSWITCH_DEVICE_NAME, minor);
     }
 
-    if (ret <= 0)
+    if (ret < 0 || ret >= NV_MAX_CHARACTER_DEVICE_FILE_STRLEN)
     {
         return 0;
     }
@@ -745,7 +819,7 @@ int nvidia_nvswitch_mknod(int minor)
 
 int nvidia_vgpu_vfio_mknod(int minor_num)
 {
-    int major = get_chardev_major(NV_VGPU_VFIO_MODULE_NAME);
+    int major = nvidia_get_chardev_major(NV_VGPU_VFIO_MODULE_NAME);
     char vgpu_dev_name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
     int ret;
 
@@ -764,6 +838,108 @@ int nvidia_vgpu_vfio_mknod(int minor_num)
     vgpu_dev_name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN - 1] = '\0';
 
     return mknod_helper(major, minor_num, vgpu_dev_name, NV_PROC_REGISTRY_PATH);
+}
+
+static int nvidia_cap_get_device_file_attrs(const char* cap_file_path,
+                                            int *major,
+                                            int *minor,
+                                            char *name)
+{
+    char field[32];
+    FILE *fp;
+    int value;
+    int ret;
+
+    *major = nvidia_get_chardev_major(NV_CAPS_MODULE_NAME);
+
+    if (*major < 0)
+    {
+        return 0;
+    }
+
+    fp = fopen(cap_file_path, "r");
+
+    if (fp == NULL)
+    {
+        return 0;
+    }
+
+    *minor = -1;
+
+    while (fscanf(fp, "%31[^:]: %d\n", field, &value) == 2)
+    {
+        field[31] = '\0';
+        if (strcmp(field, "DeviceFileMinor") == 0)
+        {
+            *minor = value;
+            break;
+        }
+    }
+
+    fclose(fp);
+
+    if (*minor < 0)
+    {
+        return 0;
+    }
+
+    ret = snprintf(name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                   NV_CAP_DEVICE_NAME, *minor);
+
+    if (ret < 0 || ret >= NV_MAX_CHARACTER_DEVICE_FILE_STRLEN)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+/*
+ * Attempt to create the NVIDIA capability device files.
+ */
+int nvidia_cap_mknod(const char* cap_file_path, int *minor)
+{
+    int major;
+    char name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    int ret;
+
+    ret = nvidia_cap_get_device_file_attrs(cap_file_path, &major, minor, name);
+    if (ret == 0)
+    {
+        return 0;
+    }
+
+    ret = mkdir("/dev/"NV_CAPS_MODULE_NAME, 0755);
+    if ((ret != 0) && (errno != EEXIST))
+    {
+        return 0;
+    }
+
+    return mknod_helper(major, *minor, name, cap_file_path);
+}
+
+int nvidia_cap_get_file_state(const char* cap_file_path)
+{
+    char path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    mode_t mode;
+    uid_t uid;
+    gid_t gid;
+    int modification_allowed;
+    int ret;
+    int major;
+    int minor;
+
+    ret = nvidia_cap_get_device_file_attrs(cap_file_path, &major, &minor, path);
+    if (ret == 0)
+    {
+        path[0] = '\0';
+    }
+
+    init_device_file_parameters(&uid, &gid, &mode, &modification_allowed,
+                                cap_file_path);
+
+    return get_file_state_helper(path, major, minor,
+                                 cap_file_path, uid, gid, mode);
 }
 
 #endif /* NV_LINUX */

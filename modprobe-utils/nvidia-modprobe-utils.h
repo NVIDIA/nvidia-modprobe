@@ -43,6 +43,9 @@
 #define NV_NVSWITCH_CTL_NAME "/dev/nvidia-nvswitchctl"
 #define NV_NVSWITCH_DEVICE_NAME "/dev/nvidia-nvswitch%d"
 
+#define NV_CAPS_MODULE_NAME "nvidia-caps"
+#define NV_CAP_DEVICE_NAME "/dev/" NV_CAPS_MODULE_NAME "/nvidia-cap%d"
+
 #if defined(NV_LINUX)
 
 typedef enum
@@ -73,7 +76,12 @@ int nvidia_modeset_modprobe(void);
 int nvidia_modeset_mknod(void);
 int nvidia_vgpu_vfio_mknod(int minor_num);
 int nvidia_nvlink_mknod(void);
+int nvidia_nvlink_get_file_state(void);
 int nvidia_nvswitch_mknod(int minor);
+int nvidia_nvswitch_get_file_state(int minor);
+int nvidia_cap_mknod(const char* cap_file_path, int *minor);
+int nvidia_cap_get_file_state(const char* cap_file_path);
+int nvidia_get_chardev_major(const char *name);
 
 #endif /* NV_LINUX */
 

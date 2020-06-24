@@ -89,19 +89,26 @@ static void print_help(void)
 int main(int argc, char *argv[])
 {
     int minors[64];
+    char *cap_files[256];
+    int num_cap_files = 0;
     int num_minors = 0;
     int i, ret = 1;
     int uvm_modprobe = FALSE;
     int modeset = FALSE;
+    int nvswitch = FALSE;
+    int nvlink = FALSE;
+    int nv_cap = FALSE;
+    int unused;
 
     while (1)
     {
         int c, intval;
+        char *strval;
 
         c = nvgetopt(argc,
                      argv,
                      __options,
-                     NULL, /* strval */
+                     &strval,
                      NULL, /* boolval */
                      &intval,
                      NULL, /* doubleval */
@@ -134,6 +141,25 @@ int main(int argc, char *argv[])
             case 'u':
                 uvm_modprobe = TRUE;
                 break;
+            case 's':
+                nvswitch = TRUE;
+                break;
+            case 'l':
+                nvlink = TRUE;
+                break;
+            case 'f':
+                nv_cap = TRUE;
+
+                if (num_cap_files < ARRAY_LEN(cap_files))
+                {
+                    cap_files[num_cap_files++] = strval;
+                }
+                else
+                {
+                    nv_error_msg("Too many NVIDIA capability device files requested.");
+                    exit(1);
+                }
+                break;
             default:
                 nv_error_msg("Invalid commandline, please run `%s --help` "
                              "for usage information.\n", argv[0]);
@@ -141,7 +167,44 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (uvm_modprobe)
+    if (nvlink)
+    {
+        /* Create the NVLink control node. */
+
+        /* Load the kernel module */
+        ret = nvidia_modprobe(0);
+        if (!ret)
+        {
+            goto done;
+        }
+
+        ret = nvidia_nvlink_mknod();
+        if (!ret)
+        {
+            goto done;
+        }
+    }
+    else if (nvswitch)
+    {
+        /* Create the NVSwitch CTL device file or device nodes. */
+
+        /* Load the kernel module */
+        ret = nvidia_modprobe(0);
+        if (!ret)
+        {
+            goto done;
+        }
+
+        for (i = 0; i < num_minors; i++)
+        {
+            ret = nvidia_nvswitch_mknod(minors[i]);
+            if (!ret)
+            {
+                goto done;
+            }
+        }
+    }
+    else if (uvm_modprobe)
     {
         /* Load the Unified Memory kernel module */
 
@@ -198,6 +261,18 @@ int main(int argc, char *argv[])
         if (!ret)
         {
             goto done;
+        }
+    }
+
+    if (nv_cap)
+    {
+        for (i = 0; i < num_cap_files; i++)
+        {
+            ret = nvidia_cap_mknod(cap_files[i], &unused);
+            if (!ret)
+            {
+                goto done;
+            }
         }
     }
 
