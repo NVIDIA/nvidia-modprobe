@@ -394,7 +394,8 @@ static void init_device_file_parameters(uid_t *uid, gid_t *gid, mode_t *mode,
         {
             *mode = value;
         }
-        if (strcmp(name, "ModifyDeviceFiles") == 0)
+        if ((strcmp(name, "ModifyDeviceFiles") == 0) ||
+            (strcmp(name, "DeviceFileModify") == 0))
         {
             *modify = value;
         }
