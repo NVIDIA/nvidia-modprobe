@@ -29,6 +29,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -66,6 +67,10 @@
 
 #define NV_NVSWITCH_MODULE_NAME "nvidia-nvswitch"
 #define NV_NVSWITCH_PROC_PERM_PATH "/proc/driver/nvidia-nvswitch/permissions"
+
+#define NV_SYS_DEVICES_SOC_FAMILY   "/sys/devices/soc0/family"
+#define NV_MAX_SOC_FAMILY_NAME_SIZE 6
+#define NV_SOC_FAMILY_NAME_TEGRA    "Tegra"
 
 #define NV_DEVICE_FILE_MODE_MASK (S_IRWXU|S_IRWXG|S_IRWXO)
 #define NV_DEVICE_FILE_MODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)
@@ -166,6 +171,31 @@ static void silence_current_process(void)
     close(dev_null_fd);
 }
 
+static bool is_tegra(void)
+{
+    char soc_family_name[NV_MAX_SOC_FAMILY_NAME_SIZE];
+    FILE *fp;
+    size_t n;
+
+    fp = fopen(NV_SYS_DEVICES_SOC_FAMILY, "r");
+    if (fp != NULL)
+    {
+        n = fread(soc_family_name, 1, sizeof(soc_family_name), fp);
+
+        fclose(fp);
+
+        n = NV_MIN(n, sizeof(soc_family_name) - 1);
+        soc_family_name[n] = '\0';
+
+        if (strcmp(soc_family_name, NV_SOC_FAMILY_NAME_TEGRA) == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /*
  * Attempt to load a kernel module; returns 1 if kernel module is
  * successfully loaded.  Returns 0 if the kernel module could not be
@@ -174,7 +204,8 @@ static void silence_current_process(void)
  * If any error is encountered and print_errors is non-0, then print the
  * error to stderr.
  */
-static int modprobe_helper(const int print_errors, const char *module_name)
+static int modprobe_helper(const int print_errors, const char *module_name,
+                           bool allow_on_tegra)
 {
     char modprobe_path[NV_PROC_MODPROBE_PATH_MAX];
     int status = 1;
@@ -222,13 +253,21 @@ static int modprobe_helper(const int print_errors, const char *module_name)
     status = pci_enum_match_id(&id_match);
     if (status == 0 && id_match.num_matches == 0)
     {
-        if (print_errors)
+        /*
+         * When allow_on_tegra is set and no NVIDIA PCI devices are present,
+         * check whether the underlying platform is Tegra SOC, if yes, then
+         * continue with the modprobe.
+         */
+        if (!allow_on_tegra || !is_tegra())
         {
-            fprintf(stderr,
-                    "NVIDIA: no NVIDIA devices found\n");
-        }
+            if (print_errors)
+            {
+                fprintf(stderr,
+                        "NVIDIA: no NVIDIA devices found\n");
+            }
 
-        return 0;
+            return 0;
+        }
     }
 
     /* Only attempt to load the kernel module if root. */
@@ -344,7 +383,7 @@ static int modprobe_helper(const int print_errors, const char *module_name)
  */
 int nvidia_modprobe(const int print_errors)
 {
-    return modprobe_helper(print_errors, NV_NVIDIA_MODULE_NAME);
+    return modprobe_helper(print_errors, NV_NVIDIA_MODULE_NAME, false);
 }
 
 
@@ -742,7 +781,7 @@ int nvidia_uvm_mknod(int base_minor)
  */
 int nvidia_uvm_modprobe(void)
 {
-    return modprobe_helper(0, NV_UVM_MODULE_NAME);
+    return modprobe_helper(0, NV_UVM_MODULE_NAME, false);
 }
 
 
@@ -751,7 +790,7 @@ int nvidia_uvm_modprobe(void)
  */
 int nvidia_modeset_modprobe(void)
 {
-    return modprobe_helper(0, NV_MODESET_MODULE_NAME);
+    return modprobe_helper(0, NV_MODESET_MODULE_NAME, true);
 }
 
 
