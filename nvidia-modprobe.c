@@ -97,7 +97,6 @@ int main(int argc, char *argv[])
     int modeset = FALSE;
     int nvswitch = FALSE;
     int nvlink = FALSE;
-    int nv_cap = FALSE;
     int unused;
 
     while (1)
@@ -148,8 +147,6 @@ int main(int argc, char *argv[])
                 nvlink = TRUE;
                 break;
             case 'f':
-                nv_cap = TRUE;
-
                 if (num_cap_files < ARRAY_LEN(cap_files))
                 {
                     cap_files[num_cap_files++] = strval;
@@ -264,19 +261,16 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (nv_cap)
+    for (i = 0; i < num_cap_files; i++)
     {
-        for (i = 0; i < num_cap_files; i++)
+        ret = nvidia_cap_mknod(cap_files[i], &unused);
+        if (!ret)
         {
-            ret = nvidia_cap_mknod(cap_files[i], &unused);
-            if (!ret)
-            {
-                goto done;
-            }
+            goto done;
         }
     }
 
- done:
+done:
 
     return !ret;
 }

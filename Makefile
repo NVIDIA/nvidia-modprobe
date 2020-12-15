@@ -156,4 +156,4 @@ $(MANPAGE_not_gzipped): nvidia-modprobe.1.m4 $(OPTIONS_1_INC) $(VERSION_MK)
 	  $< > $@
 
 $(MANPAGE_gzipped): $(MANPAGE_not_gzipped)
-	$(GZIP_CMD) -9f < $< > $@
+	$(GZIP_CMD) -9nf < $< > $@
