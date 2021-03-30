@@ -72,6 +72,8 @@
 #define NV_MAX_SOC_FAMILY_NAME_SIZE 6
 #define NV_SOC_FAMILY_NAME_TEGRA    "Tegra"
 
+#define NV_MSR_MODULE_NAME "msr"
+
 #define NV_DEVICE_FILE_MODE_MASK (S_IRWXU|S_IRWXG|S_IRWXO)
 #define NV_DEVICE_FILE_MODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)
 #define NV_DEVICE_FILE_UID 0
@@ -784,6 +786,13 @@ int nvidia_uvm_modprobe(void)
     return modprobe_helper(0, NV_UVM_MODULE_NAME, false);
 }
 
+/*
+ * Attempt to load msr module
+ */
+int nvidia_msr_modprobe(void)
+{
+    return modprobe_helper(0, NV_MSR_MODULE_NAME, false);
+}
 
 /*
  * Attempt to load the NVIDIA modeset driver.
