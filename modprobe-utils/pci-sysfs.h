@@ -30,6 +30,7 @@
 
 #if defined(NV_LINUX)
 
+#include <stdint.h>
 #include <linux/pci.h>
 
 #if !defined(PCI_STD_HEADER_SIZEOF)
