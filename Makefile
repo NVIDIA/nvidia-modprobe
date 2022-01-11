@@ -84,8 +84,8 @@ common_cflags += -I $(OUTPUTDIR)
 common_cflags += -I $(COMMON_UTILS_DIR)
 common_cflags += -I $(MODPROBE_UTILS_DIR)
 common_cflags += -DPROGRAM_NAME=\"$(NVIDIA_MODPROBE_PROGRAM_NAME)\"
-common_cflags += -D_BSD_SOURCE
-common_cflags += -ansi
+# Enable gnu99 for use of functions like snprintf(3).
+common_cflags += -std=gnu99
 common_cflags += -pedantic
 
 CFLAGS += $(common_cflags)
