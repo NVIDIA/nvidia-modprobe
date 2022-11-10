@@ -96,17 +96,18 @@ HOST_CFLAGS += $(common_cflags)
 # build rules
 ##############################################################################
 
-.PNONY: all install NVIDIA_MODPROBE_install
-.PHONY: MANPAGE_install clean clobber
-
+.PHONY: all
 all: $(NVIDIA_MODPROBE) $(MANPAGE)
 
+.PHONY: install
 install: NVIDIA_MODPROBE_install MANPAGE_install
 
+.PHONY: NVIDIA_MODPROBE_install
 NVIDIA_MODPROBE_install: $(NVIDIA_MODPROBE)
 	$(MKDIR) $(BINDIR)
 	$(INSTALL) $(INSTALL_BIN_ARGS) $< $(BINDIR)/$(notdir $<)
 
+.PHONY: MANPAGE_install
 MANPAGE_install: $(MANPAGE)
 	$(MKDIR) $(MANDIR)
 	$(INSTALL) $(INSTALL_BIN_ARGS) $< $(MANDIR)/$(notdir $<)
@@ -119,6 +120,7 @@ $(NVIDIA_MODPROBE).unstripped: $(OBJS)
 # define the rule to build each object file
 $(foreach src,$(SRC),$(eval $(call DEFINE_OBJECT_RULE,TARGET,$(src))))
 
+.PHONY: clean clobber
 clean clobber:
 	rm -rf $(NVIDIA_MODPROBE) $(MANPAGE) *~ \
 	  $(OUTPUTDIR)/*.o $(OUTPUTDIR)/*.d \
@@ -131,6 +133,7 @@ clean clobber:
 
 AUTO_TEXT = ".\\\" WARNING: THIS FILE IS AUTO-GENERATED!  Edit $< instead."
 
+.PHONY: doc
 doc: $(MANPAGE)
 
 GEN_MANPAGE_OPTS_SRC = gen-manpage-opts.c
