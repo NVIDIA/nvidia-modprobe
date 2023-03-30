@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, NVIDIA CORPORATION.
+ * Copyright (c) 2013-2023, NVIDIA CORPORATION.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -45,6 +45,8 @@
 
 #define NV_CAPS_MODULE_NAME "nvidia-caps"
 #define NV_CAP_DEVICE_NAME "/dev/" NV_CAPS_MODULE_NAME "/nvidia-cap%d"
+
+#define NV_CHAR_DEVICE_NAME "/dev/char/%d:%d"
 
 #if defined(NV_LINUX)
 
