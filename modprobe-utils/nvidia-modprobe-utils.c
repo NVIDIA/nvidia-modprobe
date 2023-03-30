@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, NVIDIA CORPORATION.
+ * Copyright (c) 2013-2023, NVIDIA CORPORATION.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -42,6 +42,7 @@
 #include "nvidia-modprobe-utils.h"
 #include "pci-enum.h"
 
+#define NV_DEV_PATH "/dev/"
 #define NV_PROC_MODPROBE_PATH "/proc/sys/kernel/modprobe"
 #define NV_PROC_MODULES_PATH "/proc/modules"
 #define NV_PROC_DEVICES_PATH "/proc/devices"
@@ -503,6 +504,75 @@ int nvidia_get_file_state(int minor)
 }
 
 /*
+ * Symbolically link the /dev/char/<major:minor> file to the given
+ * device node.
+ */
+static int symlink_char_dev(int major, int minor, const char *dev_path)
+{
+    char symlink_path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    char dev_rel_path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    struct stat link_status;
+    struct stat dev_status;
+    int ret;
+
+    ret = snprintf(symlink_path, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                   NV_CHAR_DEVICE_NAME, major, minor);
+
+    if (ret < 0 || ret >= NV_MAX_CHARACTER_DEVICE_FILE_STRLEN)
+    {
+        return 0;
+    }
+
+    /* Verify that the target device node exists and is a character device. */
+    if (stat(dev_path, &dev_status) != 0 || !S_ISCHR(dev_status.st_mode))
+    {
+        return 0;
+    }
+
+    /* Verify the device path prefix is as expected. */
+    if (strncmp(dev_path, NV_DEV_PATH, strlen(NV_DEV_PATH)) != 0)
+    {
+        return 0;
+    }
+
+    /*
+     * Create the relative path for the symlink by replacing "/dev/" prefix in
+     * the path with "../", to match existing links in the /dev/char directory.
+     */
+    ret = snprintf(dev_rel_path, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                   "../%s", dev_path + strlen(NV_DEV_PATH));
+
+    if (ret < 0 || ret >= NV_MAX_CHARACTER_DEVICE_FILE_STRLEN)
+    {
+        return 0;
+    }
+
+    /*
+     * An existing link may not point at the target device, so remove it.
+     * Any error is discarded since the failure checks below will handle
+     * the problematic cases.
+     */
+    (void)remove(symlink_path);
+
+    ret = symlink(dev_rel_path, symlink_path);
+
+    /*
+     * If the symlink(3) failed, we either don't have permission to create it,
+     * or the file already exists -- our remove(3) call above failed. In this
+     * case, we return success only if the link exists and matches the target
+     * device (stat(2) will follow the link).
+     */
+    if (ret < 0 &&
+        (stat(symlink_path, &link_status) != 0 ||
+         link_status.st_ino != dev_status.st_ino))
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+/*
  * Attempt to create the specified device file with the specified major
  * and minor number.  If proc_path is specified, scan it for custom file
  * permissions.  Returns 1 if the file is successfully created; returns 0
@@ -532,7 +602,7 @@ static int mknod_helper(int major, int minor, const char *path,
 
     if (modification_allowed != 1)
     {
-        return 1;
+        return symlink_char_dev(major, minor, path);
     }
 
     state = get_file_state_helper(path, major, minor,
@@ -542,7 +612,7 @@ static int mknod_helper(int major, int minor, const char *path,
         nvidia_test_file_state(state, NvDeviceFileStateChrDevOk) &&
         nvidia_test_file_state(state, NvDeviceFileStatePermissionsOk))
     {
-        return 1;
+        return symlink_char_dev(major, minor, path);
     }
 
     /* If the stat(2) above failed, we need to create the device file. */
@@ -594,9 +664,8 @@ static int mknod_helper(int major, int minor, const char *path,
         return 0;
     }
 
-    return 1;
+    return symlink_char_dev(major, minor, path);
 }
-
 
 /*
  * Attempt to create a device file with the specified minor number for
