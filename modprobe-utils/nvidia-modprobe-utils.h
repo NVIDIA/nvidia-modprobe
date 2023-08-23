@@ -85,6 +85,7 @@ int nvidia_cap_mknod(const char* cap_file_path, int *minor);
 int nvidia_cap_get_file_state(const char* cap_file_path);
 int nvidia_get_chardev_major(const char *name);
 int nvidia_msr_modprobe(void);
+int nvidia_enable_auto_online_movable(const int print_errors);
 
 #endif /* NV_LINUX */
 

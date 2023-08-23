@@ -97,6 +97,7 @@ int main(int argc, char *argv[])
     int modeset = FALSE;
     int nvswitch = FALSE;
     int nvlink = FALSE;
+    int enable_auto_online_movable = FALSE;
     int unused;
 
     while (1)
@@ -156,6 +157,9 @@ int main(int argc, char *argv[])
                     nv_error_msg("Too many NVIDIA capability device files requested.");
                     exit(1);
                 }
+                break;
+            case 'a':
+                enable_auto_online_movable = TRUE;
                 break;
             default:
                 nv_error_msg("Invalid commandline, please run `%s --help` "
@@ -220,6 +224,15 @@ int main(int argc, char *argv[])
             {
                 goto done;
             }
+        }
+    }
+    else if (enable_auto_online_movable)
+    {
+        /* Enable auto onlining mode online_movable */
+        ret = nvidia_enable_auto_online_movable(0);
+        if (!ret)
+        {
+            goto done;
         }
     }
     else

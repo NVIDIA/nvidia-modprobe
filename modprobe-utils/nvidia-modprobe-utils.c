@@ -1059,4 +1059,45 @@ int nvidia_cap_get_file_state(const char* cap_file_path)
                                  cap_file_path, uid, gid, mode);
 }
 
+/*
+ * Attempt to enable auto onlining mode online_movable
+ */
+int nvidia_enable_auto_online_movable(const int print_errors)
+{
+    int fd;
+    const char path_to_file[] = "/sys/devices/system/memory/auto_online_blocks";
+    const char str[] = "online_movable";
+    ssize_t write_count;
+
+    fd = open(path_to_file, O_RDWR, 0);
+    if (fd < 0)
+    {
+        if (print_errors)
+        {
+            fprintf(stderr,
+                    "NVIDIA: failed to open `%s`: %s.\n",
+                    path_to_file, strerror(errno));
+        }
+        return 0;
+    }
+
+    write_count = write(fd, str, sizeof(str));
+    if (write_count != sizeof(str))
+    {
+        if (print_errors)
+        {
+            fprintf(stderr,
+                    "NVIDIA: unable to write to `%s`: %s.\n",
+                    path_to_file, strerror(errno));
+        }
+
+        close(fd);
+        return 0;
+    }
+
+    close(fd);
+
+    return 1;
+}
+
 #endif /* NV_LINUX */

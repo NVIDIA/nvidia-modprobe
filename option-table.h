@@ -72,5 +72,13 @@ static const NVGetoptOption __options[] = {
       "/proc file path. This option can be specified multiple times to create "
       "multiple NVIDIA capability device files." },
 
+    { "auto-online-movable",
+      'a',
+       0,
+       NULL,
+       "Enable the online_movable auto onlining kernel setting for "
+       "platforms (like Grace Hopper) that add and online GPU memory "
+       "to the kernel" },
+
     { NULL, 0, 0, NULL, NULL },
 };
