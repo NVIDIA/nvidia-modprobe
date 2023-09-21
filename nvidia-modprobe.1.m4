@@ -28,7 +28,7 @@ nvidia\-modprobe \- Load the NVIDIA kernel module and create NVIDIA character de
 .SH DESCRIPTION
 The
 .B nvidia\-modprobe
-utility is used by user-space NVIDIA driver components to make sure the NVIDIA kernel module is loaded and that the NVIDIA character device files are present.  These facilities are normally provided by Linux distribution configuration systems such as udev.  When possible, it is recommended to use your Linux distribution's native mechanisms for managing kernel module loading and device file creation.  This utility is provided as a fallback to work out-of-the-box in a distribution-independent way.
+utility is used by user-space NVIDIA driver components to make sure the NVIDIA kernel module is loaded, the NVIDIA character device files are present and configure certain runtime settings in the kernel.  These facilities are normally provided by Linux distribution configuration systems such as udev.  When possible, it is recommended to use your Linux distribution's native mechanisms for managing kernel module loading, device file creation and kernel runtime config settings.  This utility is provided as a fallback to work out-of-the-box in a distribution-independent way.
 .PP
 When installed
 .B by nvidia\-installer
