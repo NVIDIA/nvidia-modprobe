@@ -1019,6 +1019,7 @@ int nvidia_cap_mknod(const char* cap_file_path, int *minor)
     int major;
     char name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
     int ret;
+    mode_t mode = 0755;
 
     ret = nvidia_cap_get_device_file_attrs(cap_file_path, &major, minor, name);
     if (ret == 0)
@@ -1026,8 +1027,14 @@ int nvidia_cap_mknod(const char* cap_file_path, int *minor)
         return 0;
     }
 
-    ret = mkdir("/dev/"NV_CAPS_MODULE_NAME, 0755);
+    ret = mkdir("/dev/"NV_CAPS_MODULE_NAME, mode);
     if ((ret != 0) && (errno != EEXIST))
+    {
+        return 0;
+    }
+
+    if ((chmod("/dev/"NV_CAPS_MODULE_NAME, mode) != 0) ||
+        (chown("/dev/"NV_CAPS_MODULE_NAME, 0, 0) != 0))
     {
         return 0;
     }
