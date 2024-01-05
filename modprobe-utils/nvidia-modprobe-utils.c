@@ -343,7 +343,7 @@ static int modprobe_helper(const int print_errors, const char *module_name,
              */
             silence_current_process();
 
-            execle(modprobe_path, "modprobe",
+            execle(modprobe_path, "modprobe", "--use-blacklist",
                    module_name, NULL, envp);
 
             /* If execl(3) returned, then an error has occurred. */
