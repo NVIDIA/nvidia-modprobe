@@ -1067,6 +1067,71 @@ int nvidia_cap_get_file_state(const char* cap_file_path)
 }
 
 /*
+ * Attempt to create the NVIDIA IMEX channel device files.
+ */
+int nvidia_cap_imex_channel_mknod(int minor)
+{
+    int major;
+    char name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    int ret;
+    mode_t mode = 0755;
+
+    major = nvidia_get_chardev_major(NV_CAPS_IMEX_CHANNELS_MODULE_NAME);
+    if (major < 0)
+    {
+        return 0;
+    }
+
+    ret = mkdir("/dev/"NV_CAPS_IMEX_CHANNELS_MODULE_NAME, mode);
+    if ((ret != 0) && (errno != EEXIST))
+    {
+        return 0;
+    }
+
+    ret = snprintf(name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                   NV_CAPS_IMEX_CHANNEL_DEVICE_NAME, minor);
+    if (ret < 0 || ret >= NV_MAX_CHARACTER_DEVICE_FILE_STRLEN)
+    {
+        return 0;
+    }
+
+    return mknod_helper(major, minor, name, NV_PROC_REGISTRY_PATH);
+}
+
+int nvidia_cap_imex_channel_file_state(int minor)
+{
+    char path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    mode_t mode;
+    uid_t uid;
+    gid_t gid;
+    int modification_allowed;
+    int state = 0;
+    int major;
+    int ret;
+
+    major = nvidia_get_chardev_major(NV_CAPS_IMEX_CHANNELS_MODULE_NAME);
+    if (major < 0)
+    {
+        return state;
+    }
+
+    ret = snprintf(path, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                   NV_CAPS_IMEX_CHANNEL_DEVICE_NAME, minor);
+    if (ret < 0 || ret >= NV_MAX_CHARACTER_DEVICE_FILE_STRLEN)
+    {
+        return state;
+    }
+
+    init_device_file_parameters(&uid, &gid, &mode, &modification_allowed,
+                                NV_PROC_REGISTRY_PATH);
+
+    state = get_file_state_helper(path, NV_MAJOR_DEVICE_NUMBER, minor,
+                                  NV_PROC_REGISTRY_PATH, uid, gid, mode);
+
+    return state;
+}
+
+/*
  * Attempt to enable auto onlining mode online_movable
  */
 int nvidia_enable_auto_online_movable(const int print_errors)

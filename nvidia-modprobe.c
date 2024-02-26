@@ -97,6 +97,8 @@ int main(int argc, char *argv[])
     int modeset = FALSE;
     int nvswitch = FALSE;
     int nvlink = FALSE;
+    int imex_channel_minor_start;
+    int imex_channel_minors = 0;
     int enable_auto_online_movable = FALSE;
     int unused;
 
@@ -155,6 +157,14 @@ int main(int argc, char *argv[])
                 else
                 {
                     nv_error_msg("Too many NVIDIA capability device files requested.");
+                    exit(1);
+                }
+                break;
+            case 'i':
+                if (sscanf(strval, "%d:%d",
+                        &imex_channel_minor_start, &imex_channel_minors) != 2)
+                {
+                    nv_error_msg("Couldn't read IMEX channel minor numbers.");
                     exit(1);
                 }
                 break;
@@ -277,6 +287,15 @@ int main(int argc, char *argv[])
     for (i = 0; i < num_cap_files; i++)
     {
         ret = nvidia_cap_mknod(cap_files[i], &unused);
+        if (!ret)
+        {
+            goto done;
+        }
+    }
+
+    for (i = 0; i < imex_channel_minors; i++)
+    {
+        ret = nvidia_cap_imex_channel_mknod(imex_channel_minor_start + i);
         if (!ret)
         {
             goto done;

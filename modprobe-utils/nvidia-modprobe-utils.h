@@ -46,6 +46,10 @@
 #define NV_CAPS_MODULE_NAME "nvidia-caps"
 #define NV_CAP_DEVICE_NAME "/dev/" NV_CAPS_MODULE_NAME "/nvidia-cap%d"
 
+#define NV_CAPS_IMEX_CHANNELS_MODULE_NAME "nvidia-caps-imex-channels"
+#define NV_CAPS_IMEX_CHANNEL_DEVICE_NAME \
+        "/dev/" NV_CAPS_IMEX_CHANNELS_MODULE_NAME "/channel%d"
+
 #define NV_CHAR_DEVICE_NAME "/dev/char/%d:%d"
 
 #if defined(NV_LINUX)
@@ -83,6 +87,8 @@ int nvidia_nvswitch_mknod(int minor);
 int nvidia_nvswitch_get_file_state(int minor);
 int nvidia_cap_mknod(const char* cap_file_path, int *minor);
 int nvidia_cap_get_file_state(const char* cap_file_path);
+int nvidia_cap_imex_channel_mknod(int minor);
+int nvidia_cap_imex_channel_file_state(int minor);
 int nvidia_get_chardev_major(const char *name);
 int nvidia_msr_modprobe(void);
 int nvidia_enable_auto_online_movable(const int print_errors);
