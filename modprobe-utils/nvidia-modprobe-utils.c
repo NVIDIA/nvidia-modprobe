@@ -44,7 +44,6 @@
 
 #define NV_DEV_PATH "/dev/"
 #define NV_PROC_MODPROBE_PATH "/proc/sys/kernel/modprobe"
-#define NV_PROC_MODULES_PATH "/proc/modules"
 #define NV_PROC_DEVICES_PATH "/proc/devices"
 
 #define NV_PROC_MODPROBE_PATH_MAX        1024
@@ -89,69 +88,33 @@
 #define NV_MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 /*
- * Just like strcmp(3), except that differences between '-' and '_' are
- * ignored. This is useful for comparing module names, where '-' and '_'
- * are supposed to be treated interchangeably.
- */
-static int modcmp(const char *a, const char *b)
-{
-    int i;
-
-    /* Walk both strings and compare each character */
-    for (i = 0; a[i] && b[i]; i++)
-    {
-        if (a[i] != b[i])
-        {
-            /* ignore differences between '-' and '_' */
-            if (((a[i] == '-') || (a[i] == '_')) &&
-                ((b[i] == '-') || (b[i] == '_')))
-            {
-                continue;
-            }
-
-            break;
-        }
-    }
-
-    /*
-     * If the strings are of unequal length, only one of a[i] or b[i] == '\0'.
-     * If they are the same length, both will be '\0', and the strings match.
-     */
-    return a[i] - b[i];
-}
-
-
-/*
- * Check whether the specified module is loaded by reading
- * NV_PROC_MODULES_PATH; returns 1 if the kernel module is loaded.
+ * Check whether the specified module is loaded by checking if its
+ * initstate file exists; returns 1 if the kernel module is loaded.
  * Otherwise, it returns 0.
  */
 static int is_kernel_module_loaded(const char *nv_module_name)
 {
-    FILE *fp;
-    char module_name[NV_MAX_MODULE_NAME_SIZE];
-    int module_loaded = 0;
+    int i;
+    char init_path[NV_MAX_LINE_LENGTH];
 
-    fp = fopen(NV_PROC_MODULES_PATH, "r");
+    snprintf(init_path, sizeof(init_path),
+             "/sys/module/%s/initstate", nv_module_name);
 
-    if (fp == NULL)
+    /*
+     * modprobe replaces '-' with '_' to generate module name from
+     * file name. Do the same when checking for module presence, by
+     * transforming nv_module_name within init_path[], starting after
+     * "/sys/module/" until "/initstate"
+     */
+    for (i = strlen("/sys/module/");
+         (init_path[i] != '\0') && (init_path[i] != '/');
+         i++)
     {
-        return 0;
+        if (init_path[i] == '-')
+            init_path[i] = '_';
     }
 
-    while (fscanf(fp, "%15s%*[^\n]\n", module_name) == 1)
-    {
-        module_name[15] = '\0';
-        if (modcmp(module_name, nv_module_name) == 0)
-        {
-            module_loaded = 1;
-            break;
-        }
-    }
-
-    fclose(fp);
-
-    return module_loaded;
+    return (access(init_path, R_OK) == 0);
 }
 
 /*
