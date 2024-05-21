@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2013-2024, NVIDIA CORPORATION.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -27,6 +27,7 @@
 
 #if defined(NV_LINUX)
 
+#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -155,22 +156,25 @@ static int is_kernel_module_loaded(const char *nv_module_name)
 }
 
 /*
- * Attempt to redirect STDOUT and STDERR to /dev/null.
+ * Create posix_spawn rules to redirect STDOUT and STDERR to /dev/null.
  *
  * This is only for the cosmetics of silencing warnings, so do not
  * treat any errors here as fatal.
  */
-static void silence_current_process(void)
+static posix_spawn_file_actions_t* silence_process_actions(void)
 {
-    int dev_null_fd = open("/dev/null", O_RDWR);
-    if (dev_null_fd < 0)
-    {
-        return;
+    posix_spawn_file_actions_t *file_actions = malloc(sizeof *file_actions);
+
+    if (!file_actions ||
+        posix_spawn_file_actions_init(file_actions)) {
+
+        free(file_actions);
+        return NULL;
     }
 
-    dup2(dev_null_fd, STDOUT_FILENO);
-    dup2(dev_null_fd, STDERR_FILENO);
-    close(dev_null_fd);
+    posix_spawn_file_actions_addopen(file_actions, STDOUT_FILENO, "/dev/null", O_RDWR, 0);
+    posix_spawn_file_actions_adddup2(file_actions, STDOUT_FILENO, STDERR_FILENO);
+    return file_actions;
 }
 
 static bool is_tegra(void)
@@ -213,7 +217,9 @@ static int modprobe_helper(const int print_errors, const char *module_name,
     int status = 1;
     struct stat file_status;
     pid_t pid;
-    const char *envp[] = { "PATH=/sbin", NULL };
+    const char * const argv[] = { "modprobe", module_name, NULL };
+    static const char *envp[] = { "PATH=/sbin", NULL };
+    posix_spawn_file_actions_t *file_actions;
     FILE *fp;
 
     /*
@@ -328,55 +334,51 @@ static int modprobe_helper(const int print_errors, const char *module_name,
 
     /* Fork and exec modprobe from the child process. */
 
-    switch (pid = fork())
-    {
-        case 0:
+    file_actions = silence_process_actions();
 
-            /*
-             * modprobe might complain in expected scenarios.  E.g.,
-             * `modprobe nvidia` on a Tegra system with dGPU where no nvidia.ko is
-             * present will complain:
-             *
-             *  "modprobe: FATAL: Module nvidia not found."
-             *
-             * Silence the current process to avoid such unwanted messages.
-             */
-            silence_current_process();
+    /*
+     * POSIX specifies that the argv and envp arguments are arrays of non-const
+     * char* pointers, but that the arguments are not modified. Cast away
+     * constness here.
+     *
+     * See man 3p execv
+     */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-qual"
+    status = posix_spawn(&pid, modprobe_path, file_actions,
+                         NULL /* attrp */,
+                         (char **) argv,
+                         (char **) envp);
+#pragma GCC diagnostic pop
 
-            execle(modprobe_path, "modprobe",
-                   module_name, NULL, envp);
-
-            /* If execl(3) returned, then an error has occurred. */
-
-            if (print_errors)
-            {
-                fprintf(stderr,
-                        "NVIDIA: failed to execute `%s`: %s.\n",
-                        modprobe_path, strerror(errno));
-            }
-            exit(1);
-
-        case -1:
-            return 0;
-
-        default:
-            /*
-             * waitpid(2) is not always guaranteed to return success even if
-             * the child terminated normally.  For example, if the process
-             * explicitly configured the handling of the SIGCHLD signal
-             * to SIG_IGN, then waitpid(2) will instead block until all
-             * children terminate and return the error ECHILD, regardless
-             * of the child's exit codes.
-             *
-             * Hence, ignore waitpid(2) error codes and instead check
-             * whether the desired kernel module is loaded.
-             */
-            waitpid(pid, NULL, 0);
-
-            return is_kernel_module_loaded(module_name);
+    if (file_actions) {
+        posix_spawn_file_actions_destroy(file_actions);
+        free(file_actions);
     }
 
-    return 1;
+    if (status) {
+        if (print_errors) {
+            fprintf(stderr,
+                    "NVIDIA: failed to execute `%s`: %s.\n",
+                    modprobe_path, strerror(status));
+        }
+        return 0;
+    }
+
+    /*
+     * waitpid(2) is not always guaranteed to return success even if
+     * the child terminated normally.  For example, if the process
+     * explicitly configured the handling of the SIGCHLD signal
+     * to SIG_IGN, then waitpid(2) will instead block until all
+     * children terminate and return the error ECHILD, regardless
+     * of the child's exit codes.
+     *
+     * Hence, ignore waitpid(2) error codes and instead check
+     * whether the desired kernel module is loaded.
+     */
+    waitpid(pid, NULL, 0);
+
+    return is_kernel_module_loaded(module_name);
 }
 
 
@@ -945,8 +947,16 @@ int nvidia_vgpu_vfio_mknod(int minor_num)
         return 0;
     }
 
-    ret = snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
-                   NV_VGPU_VFIO_DEVICE_NAME, minor_num);
+    if (minor_num == NV_VGPU_VFIO_CTL_MINOR)
+    {
+        ret = snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN, NV_VGPU_VFIO_CTL_NAME);
+    }
+    else
+    {
+        ret = snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                       NV_VGPU_VFIO_DEVICE_NAME, minor_num);
+    }
+
     if (ret <= 0)
     {
         return 0;

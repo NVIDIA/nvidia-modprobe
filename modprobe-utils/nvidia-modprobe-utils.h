@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2013-2024, NVIDIA CORPORATION.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -34,11 +34,13 @@
 #define NV_CTL_DEVICE_NUM                    255
 #define NV_MODESET_MINOR_DEVICE_NUM          254
 #define NV_NVSWITCH_CTL_MINOR                255
+#define NV_VGPU_VFIO_CTL_MINOR               0
 
 #define NV_DEVICE_FILE_PATH "/dev/nvidia%d"
 #define NV_CTRL_DEVICE_FILE_PATH "/dev/nvidiactl"
 #define NV_MODESET_DEVICE_NAME "/dev/nvidia-modeset"
 #define NV_VGPU_VFIO_DEVICE_NAME "/dev/nvidia-vgpu%d"
+#define NV_VGPU_VFIO_CTL_NAME "/dev/nvidia-vgpuctl"
 #define NV_NVLINK_DEVICE_NAME "/dev/nvidia-nvlink"
 #define NV_NVSWITCH_CTL_NAME "/dev/nvidia-nvswitchctl"
 #define NV_NVSWITCH_DEVICE_NAME "/dev/nvidia-nvswitch%d"
