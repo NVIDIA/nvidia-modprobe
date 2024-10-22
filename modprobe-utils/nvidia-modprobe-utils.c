@@ -212,6 +212,13 @@ static int modprobe_helper(const int print_errors, const char *module_name,
         return 1;
     }
 
+    /* Only attempt to load the kernel module if root. */
+
+    if (geteuid() != 0)
+    {
+        return 0;
+    }
+
     /*
      * Before attempting to load the module, look for any NVIDIA PCI devices.
      * If none exist, exit instead of attempting the modprobe, because doing so
@@ -239,13 +246,6 @@ static int modprobe_helper(const int print_errors, const char *module_name,
 
             return 0;
         }
-    }
-
-    /* Only attempt to load the kernel module if root. */
-
-    if (geteuid() != 0)
-    {
-        return 0;
     }
 
     /* Attempt to read the full path to the modprobe executable from /proc. */
