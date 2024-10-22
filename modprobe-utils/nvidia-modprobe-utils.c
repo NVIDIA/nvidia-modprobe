@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2013-2024, NVIDIA CORPORATION.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -908,8 +908,16 @@ int nvidia_vgpu_vfio_mknod(int minor_num)
         return 0;
     }
 
-    ret = snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
-                   NV_VGPU_VFIO_DEVICE_NAME, minor_num);
+    if (minor_num == NV_VGPU_VFIO_CTL_MINOR)
+    {
+        ret = snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN, NV_VGPU_VFIO_CTL_NAME);
+    }
+    else
+    {
+        ret = snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                       NV_VGPU_VFIO_DEVICE_NAME, minor_num);
+    }
+
     if (ret <= 0)
     {
         return 0;
