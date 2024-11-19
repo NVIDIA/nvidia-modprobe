@@ -42,6 +42,8 @@
 #include "nvidia-modprobe-utils.h"
 #include "pci-enum.h"
 
+
+
 #define NV_DEV_PATH "/dev/"
 #define NV_PROC_MODPROBE_PATH "/proc/sys/kernel/modprobe"
 #define NV_PROC_DEVICES_PATH "/proc/devices"
@@ -52,6 +54,7 @@
 
 #define NV_NVIDIA_MODULE_NAME "nvidia"
 #define NV_PROC_REGISTRY_PATH "/proc/driver/nvidia/params"
+#define NV_PROC_PATH_PREFIX "/proc/driver/nvidia"
 
 #define NV_UVM_MODULE_NAME "nvidia-uvm"
 #define NV_UVM_DEVICE_NAME "/dev/nvidia-uvm"
@@ -999,13 +1002,15 @@ int nvidia_cap_mknod(const char* cap_file_path, int *minor)
     }
 
     ret = mkdir("/dev/"NV_CAPS_MODULE_NAME, mode);
-    if ((ret != 0) && (errno != EEXIST))
+    if (ret == 0)
     {
-        return 0;
+        if ((chmod("/dev/"NV_CAPS_MODULE_NAME, mode) != 0) ||
+            (chown("/dev/"NV_CAPS_MODULE_NAME, 0, 0) != 0))
+        {
+            return 0;
+        }
     }
-
-    if ((chmod("/dev/"NV_CAPS_MODULE_NAME, mode) != 0) ||
-        (chown("/dev/"NV_CAPS_MODULE_NAME, 0, 0) != 0))
+    else if ((ret != 0) && (errno != EEXIST))
     {
         return 0;
     }
