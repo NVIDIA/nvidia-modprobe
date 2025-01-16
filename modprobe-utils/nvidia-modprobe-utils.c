@@ -43,6 +43,8 @@
 #include "nvidia-modprobe-utils.h"
 #include "pci-enum.h"
 
+
+
 #define NV_DEV_PATH "/dev/"
 #define NV_PROC_MODPROBE_PATH "/proc/sys/kernel/modprobe"
 #define NV_PROC_DEVICES_PATH "/proc/devices"
@@ -53,6 +55,7 @@
 
 #define NV_NVIDIA_MODULE_NAME "nvidia"
 #define NV_PROC_REGISTRY_PATH "/proc/driver/nvidia/params"
+#define NV_PROC_PATH_PREFIX "/proc/driver/nvidia"
 
 #define NV_UVM_MODULE_NAME "nvidia-uvm"
 #define NV_UVM_DEVICE_NAME "/dev/nvidia-uvm"
