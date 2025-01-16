@@ -995,6 +995,19 @@ int nvidia_cap_mknod(const char* cap_file_path, int *minor)
     int ret;
     mode_t mode = 0755;
 
+    /* Verify the path prefix is an absolute path to the NVIDIA driver /proc */
+    if ((strncmp(cap_file_path, NV_PROC_PATH_PREFIX, strlen(NV_PROC_PATH_PREFIX)) != 0) ||
+        (strstr(cap_file_path, "./") != NULL))
+    {
+        return 0;
+    }
+
+    /* Check if the (real) user has access to the path */
+    if (access(cap_file_path, R_OK) != 0)
+    {
+        return 0;
+    }
+
     ret = nvidia_cap_get_device_file_attrs(cap_file_path, &major, minor, name);
     if (ret == 0)
     {
