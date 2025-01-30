@@ -72,13 +72,6 @@ static const NVGetoptOption __options[] = {
       "/proc file path. This option can be specified multiple times to create "
       "multiple NVIDIA capability device files." },
 
-    { "nvidia-imex-channel-device-file",
-      'i',
-       NVGETOPT_STRING_ARGUMENT,
-       NULL,
-      "Create the NVIDIA IMEX channel device files for the given minor number "
-      "range format <start:number of minors>" },
-
     { "auto-online-movable",
       'a',
        0,
