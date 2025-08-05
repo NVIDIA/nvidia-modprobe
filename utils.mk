@@ -204,6 +204,14 @@ NV_QUIET_COMMAND_REMOVED_TARGET_PREFIX ?=
 
 NV_GENERATED_HEADERS ?=
 
+# Ensure the build is reproducible, for details see:
+# https://reproducible-builds.org/docs/source-date-epoch/
+ifdef SOURCE_DATE_EPOCH
+  BUILD_DATE          := $(shell $(DATE) +%F --utc --date="@$(SOURCE_DATE_EPOCH)")
+else
+  BUILD_DATE          := $(shell $(DATE) +%F)
+endif
+
 ##############################################################################
 # This makefile uses the $(eval) builtin function, which was added in
 # GNU make 3.80.  Check that the current make version recognizes it.
