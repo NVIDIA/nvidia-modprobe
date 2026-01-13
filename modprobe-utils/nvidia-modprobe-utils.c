@@ -42,6 +42,8 @@
 #include "nvidia-modprobe-utils.h"
 #include "pci-enum.h"
 
+
+
 #define NV_DEV_PATH "/dev/"
 #define NV_PROC_MODPROBE_PATH "/proc/sys/kernel/modprobe"
 #define NV_PROC_DEVICES_PATH "/proc/devices"
@@ -52,6 +54,7 @@
 
 #define NV_NVIDIA_MODULE_NAME "nvidia"
 #define NV_PROC_REGISTRY_PATH "/proc/driver/nvidia/params"
+#define NV_PROC_PATH_PREFIX "/proc/driver/nvidia"
 
 #define NV_UVM_MODULE_NAME "nvidia-uvm"
 #define NV_UVM_DEVICE_NAME "/dev/nvidia-uvm"
@@ -990,6 +993,19 @@ int nvidia_cap_mknod(const char* cap_file_path, int *minor)
     int major;
     char name[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
     int ret;
+
+    /* Verify the path prefix is an absolute path to the NVIDIA driver /proc */
+    if ((strncmp(cap_file_path, NV_PROC_PATH_PREFIX, strlen(NV_PROC_PATH_PREFIX)) != 0) ||
+        (strstr(cap_file_path, "./") != NULL))
+    {
+        return 0;
+    }
+
+    /* Check if the (real) user has access to the path */
+    if (access(cap_file_path, R_OK) != 0)
+    {
+        return 0;
+    }
 
     ret = nvidia_cap_get_device_file_attrs(cap_file_path, &major, minor, name);
     if (ret == 0)
