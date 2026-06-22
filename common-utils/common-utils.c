@@ -816,7 +816,6 @@ void remove_trailing_slashes(char *string)
 }
 
 
-
 /*
  * collapse_multiple_slashes() - remove any/all occurrences of "//" from the
  * argument string.
