@@ -14,7 +14,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "nvgetopt.h"
+#include "common-utils/nvgetopt.h" // fixed broken include
+#include <cstddef> // NULL wasn't available, so fixed missing include
 
 static const NVGetoptOption __options[] = {
 

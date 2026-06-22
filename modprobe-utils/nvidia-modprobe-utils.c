@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2013-2023, NVIDIA CORPORATION.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -27,7 +27,6 @@
 
 #if defined(NV_LINUX)
 
-#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -43,10 +42,9 @@
 #include "nvidia-modprobe-utils.h"
 #include "pci-enum.h"
 
-
-
 #define NV_DEV_PATH "/dev/"
 #define NV_PROC_MODPROBE_PATH "/proc/sys/kernel/modprobe"
+#define NV_PROC_MODULES_PATH "/proc/modules"
 #define NV_PROC_DEVICES_PATH "/proc/devices"
 
 #define NV_PROC_MODPROBE_PATH_MAX        1024
@@ -55,7 +53,6 @@
 
 #define NV_NVIDIA_MODULE_NAME "nvidia"
 #define NV_PROC_REGISTRY_PATH "/proc/driver/nvidia/params"
-#define NV_PROC_PATH_PREFIX "/proc/driver/nvidia"
 
 #define NV_UVM_MODULE_NAME "nvidia-uvm"
 #define NV_UVM_DEVICE_NAME "/dev/nvidia-uvm"
@@ -92,55 +89,88 @@
 #define NV_MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 /*
- * Check whether the specified module is loaded by checking if its
- * initstate file exists; returns 1 if the kernel module is loaded.
+ * Just like strcmp(3), except that differences between '-' and '_' are
+ * ignored. This is useful for comparing module names, where '-' and '_'
+ * are supposed to be treated interchangeably.
+ */
+static int modcmp(const char *a, const char *b)
+{
+    int i;
+
+    /* Walk both strings and compare each character */
+    for (i = 0; a[i] && b[i]; i++)
+    {
+        if (a[i] != b[i])
+        {
+            /* ignore differences between '-' and '_' */
+            if (((a[i] == '-') || (a[i] == '_')) &&
+                ((b[i] == '-') || (b[i] == '_')))
+            {
+                continue;
+            }
+
+            break;
+        }
+    }
+
+    /*
+     * If the strings are of unequal length, only one of a[i] or b[i] == '\0'.
+     * If they are the same length, both will be '\0', and the strings match.
+     */
+    return a[i] - b[i];
+}
+
+
+/*
+ * Check whether the specified module is loaded by reading
+ * NV_PROC_MODULES_PATH; returns 1 if the kernel module is loaded.
  * Otherwise, it returns 0.
  */
 static int is_kernel_module_loaded(const char *nv_module_name)
 {
-    int i;
-    char init_path[NV_MAX_LINE_LENGTH];
+    FILE *fp;
+    char module_name[NV_MAX_MODULE_NAME_SIZE];
+    int module_loaded = 0;
 
-    snprintf(init_path, sizeof(init_path),
-             "/sys/module/%s/initstate", nv_module_name);
+    fp = fopen(NV_PROC_MODULES_PATH, "r");
 
-    /*
-     * modprobe replaces '-' with '_' to generate module name from
-     * file name. Do the same when checking for module presence, by
-     * transforming nv_module_name within init_path[], starting after
-     * "/sys/module/" until "/initstate"
-     */
-    for (i = strlen("/sys/module/");
-         (init_path[i] != '\0') && (init_path[i] != '/');
-         i++)
+    if (fp == NULL)
     {
-        if (init_path[i] == '-')
-            init_path[i] = '_';
+        return 0;
     }
 
-    return (access(init_path, R_OK) == 0);
+    while (fscanf(fp, "%15s%*[^\n]\n", module_name) == 1)
+    {
+        module_name[15] = '\0';
+        if (modcmp(module_name, nv_module_name) == 0)
+        {
+            module_loaded = 1;
+            break;
+        }
+    }
+
+    fclose(fp);
+
+    return module_loaded;
 }
 
 /*
- * Create posix_spawn rules to redirect STDOUT and STDERR to /dev/null.
+ * Attempt to redirect STDOUT and STDERR to /dev/null.
  *
  * This is only for the cosmetics of silencing warnings, so do not
  * treat any errors here as fatal.
  */
-static posix_spawn_file_actions_t* silence_process_actions(void)
+static void silence_current_process(void)
 {
-    posix_spawn_file_actions_t *file_actions = malloc(sizeof *file_actions);
-
-    if (!file_actions ||
-        posix_spawn_file_actions_init(file_actions)) {
-
-        free(file_actions);
-        return NULL;
+    int dev_null_fd = open("/dev/null", O_RDWR);
+    if (dev_null_fd < 0)
+    {
+        return;
     }
 
-    posix_spawn_file_actions_addopen(file_actions, STDOUT_FILENO, "/dev/null", O_RDWR, 0);
-    posix_spawn_file_actions_adddup2(file_actions, STDOUT_FILENO, STDERR_FILENO);
-    return file_actions;
+    dup2(dev_null_fd, STDOUT_FILENO);
+    dup2(dev_null_fd, STDERR_FILENO);
+    close(dev_null_fd);
 }
 
 static bool is_tegra(void)
@@ -183,9 +213,7 @@ static int modprobe_helper(const int print_errors, const char *module_name,
     int status = 1;
     struct stat file_status;
     pid_t pid;
-    const char * const argv[] = { "modprobe", module_name, NULL };
-    static const char *envp[] = { "PATH=/sbin", NULL };
-    posix_spawn_file_actions_t *file_actions;
+    const char *envp[] = { "PATH=/sbin", NULL };
     FILE *fp;
 
     /*
@@ -215,13 +243,6 @@ static int modprobe_helper(const int print_errors, const char *module_name,
         return 1;
     }
 
-    /* Only attempt to load the kernel module if root. */
-
-    if (geteuid() != 0)
-    {
-        return 0;
-    }
-
     /*
      * Before attempting to load the module, look for any NVIDIA PCI devices.
      * If none exist, exit instead of attempting the modprobe, because doing so
@@ -249,6 +270,13 @@ static int modprobe_helper(const int print_errors, const char *module_name,
 
             return 0;
         }
+    }
+
+    /* Only attempt to load the kernel module if root. */
+
+    if (geteuid() != 0)
+    {
+        return 0;
     }
 
     /* Attempt to read the full path to the modprobe executable from /proc. */
@@ -300,51 +328,55 @@ static int modprobe_helper(const int print_errors, const char *module_name,
 
     /* Fork and exec modprobe from the child process. */
 
-    file_actions = silence_process_actions();
+    switch (pid = fork())
+    {
+        case 0:
 
-    /*
-     * POSIX specifies that the argv and envp arguments are arrays of non-const
-     * char* pointers, but that the arguments are not modified. Cast away
-     * constness here.
-     *
-     * See man 3p execv
-     */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-qual"
-    status = posix_spawn(&pid, modprobe_path, file_actions,
-                         NULL /* attrp */,
-                         (char **) argv,
-                         (char **) envp);
-#pragma GCC diagnostic pop
+            /*
+             * modprobe might complain in expected scenarios.  E.g.,
+             * `modprobe nvidia` on a Tegra system with dGPU where no nvidia.ko is
+             * present will complain:
+             *
+             *  "modprobe: FATAL: Module nvidia not found."
+             *
+             * Silence the current process to avoid such unwanted messages.
+             */
+            silence_current_process();
 
-    if (file_actions) {
-        posix_spawn_file_actions_destroy(file_actions);
-        free(file_actions);
+            execle(modprobe_path, "modprobe",
+                   module_name, NULL, envp);
+
+            /* If execl(3) returned, then an error has occurred. */
+
+            if (print_errors)
+            {
+                fprintf(stderr,
+                        "NVIDIA: failed to execute `%s`: %s.\n",
+                        modprobe_path, strerror(errno));
+            }
+            exit(1);
+
+        case -1:
+            return 0;
+
+        default:
+            /*
+             * waitpid(2) is not always guaranteed to return success even if
+             * the child terminated normally.  For example, if the process
+             * explicitly configured the handling of the SIGCHLD signal
+             * to SIG_IGN, then waitpid(2) will instead block until all
+             * children terminate and return the error ECHILD, regardless
+             * of the child's exit codes.
+             *
+             * Hence, ignore waitpid(2) error codes and instead check
+             * whether the desired kernel module is loaded.
+             */
+            waitpid(pid, NULL, 0);
+
+            return is_kernel_module_loaded(module_name);
     }
 
-    if (status) {
-        if (print_errors) {
-            fprintf(stderr,
-                    "NVIDIA: failed to execute `%s`: %s.\n",
-                    modprobe_path, strerror(status));
-        }
-        return 0;
-    }
-
-    /*
-     * waitpid(2) is not always guaranteed to return success even if
-     * the child terminated normally.  For example, if the process
-     * explicitly configured the handling of the SIGCHLD signal
-     * to SIG_IGN, then waitpid(2) will instead block until all
-     * children terminate and return the error ECHILD, regardless
-     * of the child's exit codes.
-     *
-     * Hence, ignore waitpid(2) error codes and instead check
-     * whether the desired kernel module is loaded.
-     */
-    waitpid(pid, NULL, 0);
-
-    return is_kernel_module_loaded(module_name);
+    return 1;
 }
 
 
@@ -913,16 +945,8 @@ int nvidia_vgpu_vfio_mknod(int minor_num)
         return 0;
     }
 
-    if (minor_num == NV_VGPU_VFIO_CTL_MINOR)
-    {
-        ret = snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN, NV_VGPU_VFIO_CTL_NAME);
-    }
-    else
-    {
-        ret = snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
-                       NV_VGPU_VFIO_DEVICE_NAME, minor_num);
-    }
-
+    ret = snprintf(vgpu_dev_name, NV_MAX_CHARACTER_DEVICE_FILE_STRLEN,
+                   NV_VGPU_VFIO_DEVICE_NAME, minor_num);
     if (ret <= 0)
     {
         return 0;
@@ -997,19 +1021,6 @@ int nvidia_cap_mknod(const char* cap_file_path, int *minor)
     int ret;
     mode_t mode = 0755;
 
-    /* Verify the path prefix is an absolute path to the NVIDIA driver /proc */
-    if ((strncmp(cap_file_path, NV_PROC_PATH_PREFIX, strlen(NV_PROC_PATH_PREFIX)) != 0) ||
-        (strstr(cap_file_path, "./") != NULL))
-    {
-        return 0;
-    }
-
-    /* Check if the (real) user has access to the path */
-    if (access(cap_file_path, R_OK) != 0)
-    {
-        return 0;
-    }
-
     ret = nvidia_cap_get_device_file_attrs(cap_file_path, &major, minor, name);
     if (ret == 0)
     {
@@ -1017,15 +1028,13 @@ int nvidia_cap_mknod(const char* cap_file_path, int *minor)
     }
 
     ret = mkdir("/dev/"NV_CAPS_MODULE_NAME, mode);
-    if (ret == 0)
+    if ((ret != 0) && (errno != EEXIST))
     {
-        if ((chmod("/dev/"NV_CAPS_MODULE_NAME, mode) != 0) ||
-            (chown("/dev/"NV_CAPS_MODULE_NAME, 0, 0) != 0))
-        {
-            return 0;
-        }
+        return 0;
     }
-    else if ((ret != 0) && (errno != EEXIST))
+
+    if ((chmod("/dev/"NV_CAPS_MODULE_NAME, mode) != 0) ||
+        (chown("/dev/"NV_CAPS_MODULE_NAME, 0, 0) != 0))
     {
         return 0;
     }
