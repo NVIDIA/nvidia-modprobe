@@ -181,6 +181,7 @@ static int modprobe_helper(const int print_errors, const char *module_name,
 {
     char modprobe_path[NV_PROC_MODPROBE_PATH_MAX];
     int status = 1;
+    int euid;
     struct stat file_status;
     pid_t pid;
     const char * const argv[] = { "modprobe", module_name, NULL };
@@ -217,10 +218,14 @@ static int modprobe_helper(const int print_errors, const char *module_name,
 
     /* Only attempt to load the kernel module if root. */
 
-    if (geteuid() != 0)
+    if ((euid = geteuid()) != 0)
     {
-        return 0;
+      fprintf(stderr, "euid (%d) not root\n", euid);
+      return 0;
     }
+
+    /* Modprobe might call shell scripts and shells revert to real uid */
+    setuid(euid);			/* Set ruid = euid */
 
     /*
      * Before attempting to load the module, look for any NVIDIA PCI devices.
@@ -300,7 +305,8 @@ static int modprobe_helper(const int print_errors, const char *module_name,
 
     /* Fork and exec modprobe from the child process. */
 
-    file_actions = silence_process_actions();
+    /* file_actions = silence_process_actions(); */
+    file_actions = NULL;	/* Warnings, if they occur, are helpful! */
 
     /*
      * POSIX specifies that the argv and envp arguments are arrays of non-const
