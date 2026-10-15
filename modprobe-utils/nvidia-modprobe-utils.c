@@ -479,6 +479,8 @@ static int symlink_char_dev(int major, int minor, const char *dev_path)
 {
     char symlink_path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
     char dev_rel_path[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    char link_target[NV_MAX_CHARACTER_DEVICE_FILE_STRLEN];
+    ssize_t link_length;
     struct stat link_status;
     struct stat dev_status;
     int ret;
@@ -515,6 +517,16 @@ static int symlink_char_dev(int major, int minor, const char *dev_path)
         return 0;
     }
 
+    link_length = readlink(symlink_path, link_target, sizeof(link_target));
+    if (link_length == (ssize_t)strlen(dev_rel_path) &&
+        memcmp(link_target, dev_rel_path, (size_t)link_length) == 0 &&
+        stat(symlink_path, &link_status) == 0 &&
+        link_status.st_dev == dev_status.st_dev &&
+        link_status.st_ino == dev_status.st_ino)
+    {
+        return 1;
+    }
+
     /*
      * An existing link may not point at the target device, so remove it.
      * Any error is discarded since the failure checks below will handle
@@ -532,6 +544,7 @@ static int symlink_char_dev(int major, int minor, const char *dev_path)
      */
     if (ret < 0 &&
         (stat(symlink_path, &link_status) != 0 ||
+         link_status.st_dev != dev_status.st_dev ||
          link_status.st_ino != dev_status.st_ino))
     {
         return 0;
