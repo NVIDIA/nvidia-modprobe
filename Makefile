@@ -87,10 +87,15 @@ common_cflags += -DPROGRAM_NAME=\"$(NVIDIA_MODPROBE_PROGRAM_NAME)\"
 # Enable gnu99 for use of functions like snprintf(3).
 common_cflags += -std=gnu99
 common_cflags += -pedantic
+common_cflags += -fstack-protector-strong
+common_cflags += -fstack-clash-protection
+common_cflags += $(if $(DEBUG), ,-O2 -D_FORTIFY_SOURCE=2)
+common_cflags += -fPIE
 
 CFLAGS += $(common_cflags)
 HOST_CFLAGS += $(common_cflags)
 
+LDFLAGS += -pie -Wl,-z,relro,-z,now
 
 ##############################################################################
 # build rules
