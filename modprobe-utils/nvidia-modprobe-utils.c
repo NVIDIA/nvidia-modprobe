@@ -613,7 +613,17 @@ static int mknod_helper(int major, int minor, const char *path,
         ret = mknod(path, S_IFCHR | mode, dev);
         if (ret != 0)
         {
-            return 0;
+            if (errno != EEXIST)
+            {
+                return 0;
+            }
+            state = get_file_state_helper(path, major, minor,
+                                          proc_path, uid, gid, mode);
+            if (!nvidia_test_file_state(state, NvDeviceFileStateChrDevOk))
+            {
+                return 0;
+            }
+            do_mknod = 0;
         }
     }
 
